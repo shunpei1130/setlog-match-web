@@ -47,6 +47,12 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /waiting/);
   assert.match(page, /土曜のマッチングを開始する/);
   assert.match(page, /matchingStarted/);
+  assert.match(page, /lineRegistration/);
+  assert.match(page, /scheduleReminder/);
+  assert.match(page, /LINE登録を完了する/);
+  assert.match(page, /明日はマッチング！/);
+  assert.match(page, /setlog-match-mvp-state-v3/);
+  assert.match(page, /line-modal/);
   assert.match(page, /3人の候補を見る/);
   assert.match(layout, /lang="ja"/);
   assert.match(layout, /setlog match \| 青学生限定の土曜体験/);
