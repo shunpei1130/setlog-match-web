@@ -17,6 +17,7 @@ type AppPhase =
 type DecisionOption = "instagram" | "line" | "continue" | "none";
 type PairStatus = "active" | "ended" | "blocked";
 type SetlogStatus = "idle" | "connecting" | "connected" | "error";
+type LineRegistrationStatus = "not_started" | "registered";
 
 type UserProfile = {
   displayName: string;
@@ -62,6 +63,10 @@ type StoredState = {
   participation: boolean;
   matchingStarted: boolean;
   eventKey: string;
+  lineRegistration: {
+    status: LineRegistrationStatus;
+    reminderScheduled: boolean;
+  };
   consent: {
     age: boolean;
     rules: boolean;
@@ -81,7 +86,12 @@ type SetlogAdapter = {
   endConnection: (pairId: string) => Promise<void>;
 };
 
-const STORAGE_KEY = "setlog-match-mvp-state-v2";
+type LineAdapter = {
+  startRegistration: () => Promise<void>;
+  scheduleReminder: (eventKey: string) => Promise<void>;
+};
+
+const STORAGE_KEY = "setlog-match-mvp-state-v3";
 const DEMO_EVENT_KEY = "next-saturday";
 
 const candidates: Candidate[] = [
@@ -133,6 +143,10 @@ const createInitialState = (): StoredState => ({
   participation: false,
   matchingStarted: false,
   eventKey: DEMO_EVENT_KEY,
+  lineRegistration: {
+    status: "not_started",
+    reminderScheduled: false,
+  },
   consent: { age: false, rules: false },
   profile: initialProfile,
   rankByCandidate: {},
@@ -156,6 +170,13 @@ const mockSetlogAdapter: SetlogAdapter = {
   },
   getStatus: async () => "connected",
   endConnection: async () => undefined,
+};
+
+const mockLineAdapter: LineAdapter = {
+  startRegistration: async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 450));
+  },
+  scheduleReminder: async () => undefined,
 };
 
 const phaseStep: Record<AppPhase, number> = {
@@ -204,6 +225,8 @@ export default function Home() {
   const [reportReason, setReportReason] = useState("");
   const [reportDetail, setReportDetail] = useState("");
   const [safetyError, setSafetyError] = useState("");
+  const [lineModalOpen, setLineModalOpen] = useState(false);
+  const [lineConnecting, setLineConnecting] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -242,6 +265,8 @@ export default function Home() {
     setReportReason("");
     setReportDetail("");
     setSafetyError("");
+    setLineModalOpen(false);
+    setLineConnecting(false);
   };
 
   const handleParticipation = () => {
@@ -249,7 +274,29 @@ export default function Home() {
       updateState({ notice: "年齢確認と安全ルールへの同意が必要です。" });
       return;
     }
+    if (state.lineRegistration.status !== "registered") {
+      updateState({ notice: "事前登録にはLINE登録が必要です。" });
+      setLineModalOpen(true);
+      return;
+    }
     updateState({ participation: true, matchingStarted: false, phase: "waiting", notice: null });
+  };
+
+  const completeLineRegistration = async () => {
+    setLineConnecting(true);
+    try {
+      await mockLineAdapter.startRegistration();
+      await mockLineAdapter.scheduleReminder(state.eventKey);
+      updateState({
+        lineRegistration: { status: "registered", reminderScheduled: true },
+        notice: null,
+      });
+      setLineModalOpen(false);
+    } catch {
+      updateState({ notice: "LINE登録の準備に失敗しました。もう一度お試しください。" });
+    } finally {
+      setLineConnecting(false);
+    }
   };
 
   const startMatching = () => {
@@ -482,6 +529,15 @@ export default function Home() {
                 <span><strong>安全ルールに同意します</strong><small>嫌なことは断ってよい。いつでもブロック・通報できます。</small></span>
               </label>
             </div>
+            <div className={`line-setup-card ${state.lineRegistration.status === "registered" ? "is-registered" : ""}`}>
+              <div className="line-setup-card__icon">LINE</div>
+              <div className="line-setup-card__body">
+                <span className="label">参加に必要です</span>
+                <strong>{state.lineRegistration.status === "registered" ? "LINE登録済み" : "LINEを登録して、前日の案内を受け取る"}</strong>
+                <p>{state.lineRegistration.status === "registered" ? "金曜21:00に「明日はマッチング！」の案内を送る予定です。" : "前日21:00に参加アンケートをお送りします。"}</p>
+              </div>
+              {state.lineRegistration.status === "registered" ? <span className="line-setup-card__check">✓</span> : <button className="secondary-button" type="button" onClick={() => setLineModalOpen(true)}>LINE登録する <span>→</span></button>}
+            </div>
             <button className="primary-button full-width" onClick={handleParticipation}>参加登録を完了する <span>→</span></button>
           </section>
         )}
@@ -495,6 +551,7 @@ export default function Home() {
               <div className="waiting-card__top"><span className="status-pill status-pill--light"><span className="status-dot" />事前登録済み</span><span className="event-number">NEXT SATURDAY</span></div>
               <div className="waiting-card__date"><span>毎週土曜</span><strong>12:00</strong><small>マッチング開始</small></div>
               <div className="waiting-card__copy"><strong>土曜になったら、ここから開始</strong><p>開始ボタンを押すまで、候補者や相手の情報は表示されません。</p></div>
+              <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>前日21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
             </div>
             <button className="primary-button full-width" onClick={startMatching}>土曜のマッチングを開始する <span>→</span></button>
             <p className="waiting-note">デモ版では曜日に関係なく、開始ボタンで土曜の状態を再現できます。</p>
@@ -589,6 +646,20 @@ export default function Home() {
             <div className="modal-top"><div><span className="eyebrow">Safety menu</span><h2 id="safety-title">困ったときは、<br /><em>すぐに離れて大丈夫。</em></h2></div><button className="close-button" onClick={() => setSafetyOpen(false)} aria-label="安全メニューを閉じる">×</button></div>
             <p>返信をしなくても、理由を説明しなくても大丈夫です。ブロックすると相手を非表示にし、通報すると運営に共有します。</p>
             <div className="safety-actions"><button className="danger-button" onClick={() => endForSafety("blocked")}>相手をブロックする</button><div className="report-box"><label htmlFor="report-reason">通報理由</label><select id="report-reason" value={reportReason} onChange={(event) => { setReportReason(event.target.value); setSafetyError(""); }}><option value="">選択してください</option><option value="harassment">不快な言動・嫌がらせ</option><option value="identity">プロフィールや所属が不自然</option><option value="solicitation">勧誘・金銭の要求</option><option value="other">その他</option></select><label htmlFor="report-detail">補足（任意）</label><textarea id="report-detail" value={reportDetail} onChange={(event) => setReportDetail(event.target.value)} placeholder="気になったことがあれば書いてください" rows={3} />{safetyError && <p className="field-error" role="alert">{safetyError}</p>}<button className="secondary-button full-width" onClick={submitReport}>運営に通報する <span>→</span></button></div></div>
+          </section>
+        </div>
+      )}
+
+      {lineModalOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setLineModalOpen(false)}>
+          <section className="line-modal" role="dialog" aria-modal="true" aria-labelledby="line-modal-title" onClick={(event) => event.stopPropagation()}>
+            <div className="line-modal__mark">LINE</div>
+            <p className="eyebrow">LINE registration</p>
+            <h2 id="line-modal-title">前日の案内を、<br /><em>LINEで受け取る。</em></h2>
+            <p>事前登録にはLINE登録が必要です。金曜21:00に、明日のマッチングに参加するかを確認するアンケートをお送りします。</p>
+            <div className="line-modal__preview"><span>金曜 21:00</span><strong>明日はマッチング！</strong><small>参加する / 今回は見送る</small></div>
+            <button className="primary-button full-width" type="button" onClick={completeLineRegistration} disabled={lineConnecting}>{lineConnecting ? "LINE登録を準備中…" : "LINE登録を完了する"}<span>→</span></button>
+            <button className="text-button full-width" type="button" onClick={() => setLineModalOpen(false)}>あとで登録する</button>
           </section>
         </div>
       )}
