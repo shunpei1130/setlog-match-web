@@ -92,7 +92,7 @@ h1 em, h2 em { color: var(--coral); font-style: italic; }
 
 .progress-panel { margin: 15px 0 48px; padding: 16px 0 0; border-top: 1px solid var(--line); }
 .progress-topline { display: flex; justify-content: space-between; color: var(--ink-soft); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
-.progress-track { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 16px; }
+.progress-track { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 16px; }
 .progress-step { display: flex; align-items: center; gap: 7px; color: #a2a7ad; font-size: 10px; }
 .progress-step.is-active { color: var(--ink); }
 .progress-dot { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #c7c7c2; border-radius: 50%; font-size: 9px; }
@@ -121,6 +121,16 @@ h1 em, h2 em { color: var(--coral); font-style: italic; }
 .check-row strong, .check-row small { display: block; }
 .check-row strong { font-size: 12px; }
 .check-row small { margin-top: 4px; color: var(--ink-soft); font-size: 10px; line-height: 1.5; }
+.waiting-section { max-width: 700px; }
+.waiting-card { margin: 32px 0 20px; padding: 22px; border: 1px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: var(--shadow); }
+.waiting-card__top { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.waiting-card__date { display: flex; align-items: baseline; gap: 14px; margin: 42px 0 28px; }
+.waiting-card__date span, .waiting-card__date small { color: var(--ink-soft); font-size: 11px; letter-spacing: 0.1em; }
+.waiting-card__date strong { font-family: Georgia, serif; font-size: clamp(54px, 10vw, 88px); font-weight: 400; letter-spacing: -0.08em; line-height: 0.8; }
+.waiting-card__copy { padding-top: 18px; border-top: 1px solid var(--line); }
+.waiting-card__copy strong { font-family: Georgia, serif; font-size: 19px; font-weight: 400; }
+.waiting-card__copy p, .waiting-note { margin: 8px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.7; }
+.waiting-note { text-align: center; }
 
 .candidate-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 34px 0 28px; }
 .candidate-card { min-height: 355px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 19px; background: var(--card); overflow: hidden; box-shadow: 0 7px 25px rgba(24, 42, 66, 0.035); }
