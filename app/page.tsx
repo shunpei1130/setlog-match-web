@@ -5,6 +5,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 type AppPhase =
   | "landing"
   | "participation"
+  | "waiting"
   | "recommendation"
   | "ranking"
   | "dayPair"
@@ -59,6 +60,8 @@ type ResultState = {
 type StoredState = {
   phase: AppPhase;
   participation: boolean;
+  matchingStarted: boolean;
+  eventKey: string;
   consent: {
     age: boolean;
     rules: boolean;
@@ -78,7 +81,8 @@ type SetlogAdapter = {
   endConnection: (pairId: string) => Promise<void>;
 };
 
-const STORAGE_KEY = "setlog-match-mvp-state-v1";
+const STORAGE_KEY = "setlog-match-mvp-state-v2";
+const DEMO_EVENT_KEY = "next-saturday";
 
 const candidates: Candidate[] = [
   {
@@ -127,6 +131,8 @@ const initialProfile: UserProfile = {
 const createInitialState = (): StoredState => ({
   phase: "landing",
   participation: false,
+  matchingStarted: false,
+  eventKey: DEMO_EVENT_KEY,
   consent: { age: false, rules: false },
   profile: initialProfile,
   rankByCandidate: {},
@@ -155,16 +161,17 @@ const mockSetlogAdapter: SetlogAdapter = {
 const phaseStep: Record<AppPhase, number> = {
   landing: 0,
   participation: 0,
-  recommendation: 1,
-  ranking: 2,
-  dayPair: 3,
-  setlog: 3,
-  decision: 4,
-  result: 5,
-  ended: 5,
+  waiting: 1,
+  recommendation: 2,
+  ranking: 3,
+  dayPair: 4,
+  setlog: 4,
+  decision: 5,
+  result: 6,
+  ended: 6,
 };
 
-const phaseLabels = ["参加登録", "候補を見る", "希望順位", "Day Pair", "一日の終わり", "結果"];
+const phaseLabels = ["事前登録", "土曜開始", "候補を見る", "希望順位", "Day Pair", "一日の終わり", "結果"];
 
 const optionLabels: Record<DecisionOption, string> = {
   instagram: "Instagram",
@@ -242,7 +249,15 @@ export default function Home() {
       updateState({ notice: "年齢確認と安全ルールへの同意が必要です。" });
       return;
     }
-    updateState({ participation: true, phase: "recommendation", notice: null });
+    updateState({ participation: true, matchingStarted: false, phase: "waiting", notice: null });
+  };
+
+  const startMatching = () => {
+    if (!state.participation) {
+      updateState({ phase: "participation", notice: "先に次回土曜への事前登録を完了してください。" });
+      return;
+    }
+    updateState({ matchingStarted: true, phase: "recommendation", notice: null });
   };
 
   const toggleRank = (candidateId: string, rank: number) => {
@@ -383,7 +398,7 @@ export default function Home() {
         {state.phase !== "landing" && (
           <div className="progress-panel" aria-label="参加の進行状況">
             <div className="progress-topline">
-              <span>Saturday / 08.08</span>
+              <span>次回土曜 / 12:00</span>
               <span>{phaseLabels[Math.min(currentStep, phaseLabels.length - 1)]}</span>
             </div>
             <div className="progress-track">
@@ -409,7 +424,7 @@ export default function Home() {
               </p>
               <div className="hero-actions">
                 <button className="primary-button" onClick={() => updateState({ phase: "participation", notice: null })}>
-                  次の土曜に参加する <span>↗</span>
+                  次の土曜に事前登録する <span>↗</span>
                 </button>
                 <span className="micro-copy">登録無料 / 18歳以上 / 青学生限定</span>
               </div>
@@ -421,9 +436,9 @@ export default function Home() {
                 <span className="event-number">01 / 04</span>
               </div>
               <div className="date-lockup">
-                <span>SAT</span>
-                <strong>08</strong>
-                <span>AUG 2026</span>
+                <span>NEXT</span>
+                <strong>SAT</strong>
+                <span>12:00 START</span>
               </div>
               <div className="event-card__bottom">
                 <div>
@@ -447,9 +462,9 @@ export default function Home() {
 
         {state.phase === "participation" && (
           <section className="page-section narrow-section">
-            <p className="eyebrow">01 / Join the Saturday</p>
-            <h2>今週の土曜を、<br /><em>少しだけ開いてみる。</em></h2>
-            <p className="section-lede">まずは参加条件と、今日の過ごし方を確認します。相手に見えるのは、あなたが選んだプロフィールだけです。</p>
+            <p className="eyebrow">01 / Pre-register for Saturday</p>
+            <h2>次回土曜に、<br /><em>事前登録しておく。</em></h2>
+            <p className="section-lede">登録はいつでもできます。参加枠を確保しておけば、土曜になったときにマッチングを開始できます。</p>
             <div className="detail-card profile-preview">
               <div className="avatar avatar--you">YU</div>
               <div><span className="label">あなたのプロフィール</span><strong>{state.profile.displayName} / {state.profile.year}</strong><p>{state.profile.purpose}</p></div>
@@ -468,6 +483,21 @@ export default function Home() {
               </label>
             </div>
             <button className="primary-button full-width" onClick={handleParticipation}>参加登録を完了する <span>→</span></button>
+          </section>
+        )}
+
+        {state.phase === "waiting" && (
+          <section className="page-section narrow-section waiting-section">
+            <p className="eyebrow">02 / Saturday is coming</p>
+            <h2>事前登録が、<br /><em>完了しました。</em></h2>
+            <p className="section-lede">次回土曜の参加枠を確保しています。候補者と希望順位は、土曜のマッチング開始後に表示されます。</p>
+            <div className="waiting-card">
+              <div className="waiting-card__top"><span className="status-pill status-pill--light"><span className="status-dot" />事前登録済み</span><span className="event-number">NEXT SATURDAY</span></div>
+              <div className="waiting-card__date"><span>毎週土曜</span><strong>12:00</strong><small>マッチング開始</small></div>
+              <div className="waiting-card__copy"><strong>土曜になったら、ここから開始</strong><p>開始ボタンを押すまで、候補者や相手の情報は表示されません。</p></div>
+            </div>
+            <button className="primary-button full-width" onClick={startMatching}>土曜のマッチングを開始する <span>→</span></button>
+            <p className="waiting-note">デモ版では曜日に関係なく、開始ボタンで土曜の状態を再現できます。</p>
           </section>
         )}
 
