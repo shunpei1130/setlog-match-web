@@ -1,5 +1,17 @@
 # Setlog Match Web
 
+## Neon DB
+
+待機人数と次回土曜の事前登録はNeon Postgresに保存します。接続文字列は`.env.local`またはVercelの`DATABASE_URL`環境変数で設定してください。秘密情報はGitHubへ保存しません。
+
+```bash
+Copy-Item .env.example .env.local
+npm run db:generate
+npm run db:migrate
+```
+
+DB未接続のローカル環境では、待機人数は0人ではなく「人数を取得できません」と表示されます。
+
 ## 今回の更新
 
 - 事前登録時のLINE登録モック
