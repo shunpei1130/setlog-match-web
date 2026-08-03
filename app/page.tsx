@@ -18,6 +18,11 @@ type DecisionOption = "instagram" | "line" | "continue" | "none";
 type PairStatus = "active" | "ended" | "blocked";
 type SetlogStatus = "idle" | "connecting" | "connected" | "error";
 type LineRegistrationStatus = "not_started" | "registered";
+type WaitingCountState = {
+  status: "loading" | "ready" | "error";
+  count: number | null;
+  updatedAt?: string;
+};
 
 type UserProfile = {
   displayName: string;
@@ -227,6 +232,8 @@ export default function Home() {
   const [safetyError, setSafetyError] = useState("");
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [lineConnecting, setLineConnecting] = useState(false);
+  const [participationSubmitting, setParticipationSubmitting] = useState(false);
+  const [waitingCount, setWaitingCount] = useState<WaitingCountState>({ status: "loading", count: null });
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -246,6 +253,34 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshWaitingCount = async () => {
+      setWaitingCount((previous) => ({ ...previous, status: previous.count === null ? "loading" : previous.status }));
+      try {
+        const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/waiting-count`, {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Waiting count unavailable");
+        const payload = await response.json() as { count?: unknown; updatedAt?: string };
+        if (typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0) {
+          throw new Error("Invalid waiting count");
+        }
+        if (!cancelled) setWaitingCount({ status: "ready", count: payload.count, updatedAt: payload.updatedAt });
+      } catch {
+        if (!cancelled) setWaitingCount((previous) => ({ ...previous, status: "error" }));
+      }
+    };
+
+    void refreshWaitingCount();
+    const interval = window.setInterval(() => void refreshWaitingCount(), 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [state.eventKey]);
 
   const selectedCandidate = useMemo(
     () => candidates.find((candidate) => candidate.id === state.pair?.candidateId) ?? null,
@@ -269,7 +304,7 @@ export default function Home() {
     setLineConnecting(false);
   };
 
-  const handleParticipation = () => {
+  const handleParticipation = async () => {
     if (!state.consent.age || !state.consent.rules) {
       updateState({ notice: "年齢確認と安全ルールへの同意が必要です。" });
       return;
@@ -279,8 +314,32 @@ export default function Home() {
       setLineModalOpen(true);
       return;
     }
-    updateState({ participation: true, matchingStarted: false, phase: "waiting", notice: null });
+    setParticipationSubmitting(true);
+    try {
+      const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/registrations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineRegistered: true }),
+      });
+      if (!response.ok) throw new Error("Registration unavailable");
+      const payload = await response.json() as { count?: unknown; updatedAt?: string };
+      if (typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0) {
+        throw new Error("Invalid registration response");
+      }
+      setWaitingCount({ status: "ready", count: payload.count, updatedAt: payload.updatedAt });
+      updateState({ participation: true, matchingStarted: false, phase: "waiting", notice: null });
+    } catch {
+      updateState({ notice: "事前登録を保存できませんでした。通信を確認して、もう一度お試しください。" });
+    } finally {
+      setParticipationSubmitting(false);
+    }
   };
+
+  const waitingCountText = waitingCount.status === "error"
+    ? "人数を取得できません"
+    : waitingCount.count !== null
+      ? `現在 ${waitingCount.count}人`
+      : "人数を確認中…";
 
   const completeLineRegistration = async () => {
     setLineConnecting(true);
@@ -487,6 +546,11 @@ export default function Home() {
                 <strong>SAT</strong>
                 <span>12:00 START</span>
               </div>
+              <div className="event-card__count" aria-live="polite">
+                <span className="label">WAITING NOW</span>
+                <strong>{waitingCountText}</strong>
+                <small>LINE登録済みの事前参加者</small>
+              </div>
               <div className="event-card__bottom">
                 <div>
                   <span className="label">Day Pair</span>
@@ -538,7 +602,7 @@ export default function Home() {
               </div>
               {state.lineRegistration.status === "registered" ? <span className="line-setup-card__check">✓</span> : <button className="secondary-button" type="button" onClick={() => setLineModalOpen(true)}>LINE登録する <span>→</span></button>}
             </div>
-            <button className="primary-button full-width" onClick={handleParticipation}>参加登録を完了する <span>→</span></button>
+            <button className="primary-button full-width" onClick={handleParticipation} disabled={participationSubmitting}>{participationSubmitting ? "事前登録を保存中…" : "参加登録を完了する"} <span>→</span></button>
           </section>
         )}
 
@@ -552,6 +616,7 @@ export default function Home() {
               <div className="waiting-card__date"><span>毎週土曜</span><strong>12:00</strong><small>マッチング開始</small></div>
               <div className="waiting-card__copy"><strong>土曜になったら、ここから開始</strong><p>開始ボタンを押すまで、候補者や相手の情報は表示されません。</p></div>
               <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>前日21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
+              <div className="waiting-card__count" aria-live="polite"><span className="label">WAITING NOW</span><strong>{waitingCountText}</strong><p>次回土曜に参加予定の青学生です。</p></div>
             </div>
             <button className="primary-button full-width" onClick={startMatching}>土曜のマッチングを開始する <span>→</span></button>
             <p className="waiting-note">デモ版では曜日に関係なく、開始ボタンで土曜の状態を再現できます。</p>
