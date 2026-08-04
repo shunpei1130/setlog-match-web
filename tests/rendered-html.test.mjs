@@ -27,7 +27,7 @@ test("server-renders the Setlog Match MVP", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>setlog match \| 青学生限定の土曜体験<\/title>/i);
+  assert.match(html, /<title>setlog \/ saturday issue \| 青学生限定<\/title>/i);
   assert.match(html, /土曜日を準備しています/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
@@ -97,9 +97,9 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(envExample, /DATABASE_URL=/);
   assert.match(migration, /CREATE TABLE "events"/);
   assert.match(migration, /CREATE TABLE "event_registrations"/);
-  assert.match(page, /3人の候補を見る/);
+  assert.match(page, /3人の土曜日を読む/);
   assert.match(layout, /lang="ja"/);
-  assert.match(layout, /setlog match \| 青学生限定の土曜体験/);
+  assert.match(layout, /setlog \/ saturday issue \| 青学生限定/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url)));

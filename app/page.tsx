@@ -500,7 +500,7 @@ export default function Home() {
           <span className="brand-mark">S</span>
           <span>
             <strong>setlog match</strong>
-            <small>青学生限定・毎週土曜</small>
+            <small>SATURDAY ISSUE / 001</small>
           </span>
         </button>
         <button className="reset-button" onClick={resetDemo}>
@@ -513,15 +513,14 @@ export default function Home() {
           <div className="progress-panel" aria-label="参加の進行状況">
             <div className="progress-topline">
               <span>次回土曜 / 12:00</span>
-              <span>{phaseLabels[Math.min(currentStep, phaseLabels.length - 1)]}</span>
+              <span>{String(Math.min(currentStep + 1, phaseLabels.length)).padStart(2, "0")} / {String(phaseLabels.length).padStart(2, "0")}</span>
             </div>
-            <div className="progress-track">
-              {phaseLabels.map((label, index) => (
-                <div className={`progress-step ${index <= currentStep ? "is-active" : ""}`} key={label}>
-                  <span className="progress-dot">{index < currentStep ? "✓" : index + 1}</span>
-                  <span>{label}</span>
-                </div>
-              ))}
+            <div className="progress-bar" aria-hidden="true">
+              <span style={{ width: `${Math.max(8, (currentStep / (phaseLabels.length - 1)) * 100)}%` }} />
+            </div>
+            <div className="progress-current">
+              <strong>{phaseLabels[Math.min(currentStep, phaseLabels.length - 1)]}</strong>
+              <span>{currentStep < phaseLabels.length - 1 ? `次は ${phaseLabels[currentStep + 1]}` : "参加完了"}</span>
             </div>
           </div>
         )}
@@ -531,7 +530,7 @@ export default function Home() {
         {state.phase === "landing" && (
           <section className="landing-grid">
             <div className="hero-copy">
-              <p className="eyebrow">Aoyama Gakuin / Saturday ritual</p>
+              <p className="eyebrow">SETLOG / SATURDAY ISSUE 001</p>
               <h1>青学の知らない人の一日、<em>見てみない？</em></h1>
               <p className="hero-lede">
                 写真で選ぶ前に、その人の普通の土曜日を見る。Setlogで一日を共有して、夜にお互いの気持ちを静かに確かめます。
@@ -547,21 +546,21 @@ export default function Home() {
             <div className="event-card">
               <div className="event-card__top">
                 <span className="status-pill"><span className="status-dot" />受付中</span>
-                <span className="event-number">01 / 04</span>
+                <span className="event-number">ISSUE 01</span>
               </div>
               <div className="date-lockup">
-                <span>NEXT</span>
+                <span>次回号</span>
                 <strong>SAT</strong>
-                <span>12:00 START</span>
+                <span>12:00 / 開場</span>
               </div>
               <div className="event-card__count" aria-live="polite">
-                <span className="label">WAITING NOW</span>
+                <span className="label">現在の待機人数</span>
                 <strong>{waitingCountText}</strong>
                 <small>LINE登録済みの事前参加者</small>
               </div>
               <div className="event-card__bottom">
                 <div>
-                  <span className="label">Day Pair</span>
+                  <span className="label">土曜のDay Pair</span>
                   <strong>一日の共有から始まる出会い</strong>
                 </div>
                 <span className="arrow-badge">↗</span>
@@ -569,11 +568,11 @@ export default function Home() {
             </div>
 
             <div className="principles-card">
-              <span className="label">How it works</span>
+              <span className="label">このアプリの流れ</span>
               <div className="principle-list">
-                <div><span>01</span><strong>3人の候補を見る</strong><p>同じ大学、近い空気感。</p></div>
-                <div><span>02</span><strong>一日をSetlogする</strong><p>連絡先はまだ聞かない。</p></div>
-                <div><span>03</span><strong>夜に静かに選ぶ</strong><p>一致したものだけ開示。</p></div>
+                <div><span>01</span><strong>見る</strong><p>3人の土曜日を読む。</p></div>
+                <div><span>02</span><strong>共有する</strong><p>自分の一日をSetlogする。</p></div>
+                <div><span>03</span><strong>選ぶ</strong><p>夜に、静かに決める。</p></div>
               </div>
             </div>
           </section>
@@ -581,7 +580,7 @@ export default function Home() {
 
         {state.phase === "participation" && (
           <section className="page-section narrow-section">
-            <p className="eyebrow">01 / Pre-register for Saturday</p>
+            <p className="eyebrow">01 / 次回土曜の準備</p>
             <h2>次回土曜に、<br /><em>事前登録しておく。</em></h2>
             <p className="section-lede">登録はいつでもできます。参加枠を確保しておけば、土曜になったときにマッチングを開始できます。</p>
             <div className="detail-card profile-preview">
@@ -634,7 +633,7 @@ export default function Home() {
 
         {state.phase === "waiting" && (
           <section className="page-section narrow-section waiting-section">
-            <p className="eyebrow">02 / Saturday is coming</p>
+            <p className="eyebrow">02 / 土曜を待つ</p>
             <h2>事前登録が、<br /><em>完了しました。</em></h2>
             <p className="section-lede">次回土曜の参加枠を確保しています。候補者と希望順位は、土曜のマッチング開始後に表示されます。</p>
             <div className="waiting-card">
@@ -642,7 +641,7 @@ export default function Home() {
               <div className="waiting-card__date"><span>毎週土曜</span><strong>12:00</strong><small>マッチング開始</small></div>
               <div className="waiting-card__copy"><strong>土曜になったら、ここから開始</strong><p>開始ボタンを押すまで、候補者や相手の情報は表示されません。</p></div>
               <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>前日21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
-              <div className="waiting-card__count" aria-live="polite"><span className="label">WAITING NOW</span><strong>{waitingCountText}</strong><p>次回土曜に参加予定の青学生です。</p></div>
+              <div className="waiting-card__count" aria-live="polite"><span className="label">現在の待機人数</span><strong>{waitingCountText}</strong><p>次回土曜に参加予定の青学生です。</p></div>
             </div>
             <button className="primary-button full-width" onClick={startMatching}>土曜のマッチングを開始する <span>→</span></button>
             <p className="waiting-note">デモ版では曜日に関係なく、開始ボタンで土曜の状態を再現できます。</p>
@@ -651,7 +650,7 @@ export default function Home() {
 
         {state.phase === "recommendation" && (
           <section className="page-section">
-            <div className="section-heading-row"><div><p className="eyebrow">02 / Three people, three Saturdays</p><h2>今日の候補は、<em>この3人。</em></h2></div><span className="count-note">青学生 / 本人確認済み</span></div>
+            <div className="section-heading-row"><div><p className="eyebrow">03 / 今日届いた3つの一日</p><h2>今日の候補は、<em>この3人。</em></h2></div><span className="count-note">青学生 / 本人確認済み</span></div>
             <p className="section-lede">プロフィールを読んで、気になる順番をつけます。相手にあなたの順位が伝わることはありません。</p>
             <div className="candidate-grid">
               {candidates.map((candidate, index) => (
@@ -667,7 +666,7 @@ export default function Home() {
 
         {state.phase === "ranking" && (
           <section className="page-section">
-            <div className="section-heading-row"><div><p className="eyebrow">03 / Your private order</p><h2>気になる順番を、<em>静かに。</em></h2></div><span className="count-note">最大3人 / 1人からOK</span></div>
+            <div className="section-heading-row"><div><p className="eyebrow">04 / あなたの内緒の順位</p><h2>気になる順番を、<em>静かに。</em></h2></div><span className="count-note">最大3人 / 1人からOK</span></div>
             <p className="section-lede">選んだ順位は、マッチングのためだけに使います。「第3希望だった」と相手に伝わることはありません。</p>
             <div className="ranking-layout">
               <div className="ranking-list">
@@ -683,7 +682,7 @@ export default function Home() {
 
         {state.phase === "dayPair" && selectedCandidate && (
           <section className="page-section pair-section">
-            <p className="eyebrow">04 / Today&apos;s Day Pair</p>
+            <p className="eyebrow">05 / 今日のDay Pair</p>
             <div className="pair-intro"><div><h2>今日の相手は、<br /><em>{selectedCandidate.displayName}さん。</em></h2><p>お互いの条件が合ったため、本日のDay Pairになりました。</p></div><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span><i>●</i></div></div>
             <div className="pair-timeline"><div className="timeline-item is-done"><span>12:00</span><div><strong>Day Pair成立</strong><p>相手に会えたことだけをお知らせしています。</p></div></div><div className="timeline-item is-current"><span>12:00 — 22:00</span><div><strong>Setlogで一日を共有</strong><p>連絡先はまだ聞かない。今日の普通を見せ合う時間です。</p></div></div><div className="timeline-item"><span>22:00</span><div><strong>非公開判定</strong><p>続けたいものを、アプリだけで選びます。</p></div></div></div>
             <div className="rule-callout"><span>✳</span><p><strong>このDay Pairは本日23時に終了します。</strong><br />続けるかどうかは、夜にお互いが非公開で選択します。</p></div>
@@ -693,10 +692,10 @@ export default function Home() {
 
         {state.phase === "setlog" && selectedCandidate && (
           <section className="page-section narrow-section">
-            <p className="eyebrow">04 / Setlog connection</p>
+            <p className="eyebrow">05 / Setlogにつなぐ</p>
             <h2>今日は、<em>一日の共有から。</em></h2>
             <p className="section-lede">Setlogでお互いの土曜日を共有します。連絡先交換の話は、夜の判定までしなくて大丈夫です。</p>
-            <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">setlog<span>↗</span></div><span className="status-pill status-pill--light">Day Pair room</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">TODAY&apos;S ROOM</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / private day log</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>Setlogの準備ができました</strong><p>今日は一日を楽しんでください。22時にここへ戻ってきます。</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>接続できませんでした</strong><p>通信を確認して、もう一度試してください。</p></div> : <div className="setlog-card__action"><p>接続はデモモードで行われます。実際のSetlogは開きません。</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "接続中…" : "Setlogを準備する"}<span>↗</span></button></div>}</div>
+            <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">setlog<span>↗</span></div><span className="status-pill status-pill--light">Day Pairの部屋</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">今日の共有ルーム</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 一日のログ</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>Setlogの準備ができました</strong><p>今日は一日を楽しんでください。22時にここへ戻ってきます。</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>接続できませんでした</strong><p>通信を確認して、もう一度試してください。</p></div> : <div className="setlog-card__action"><p>接続はデモモードで行われます。実際のSetlogは開きません。</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "接続中…" : "Setlogを準備する"}<span>↗</span></button></div>}</div>
             {state.setlogStatus === "connected" && <div className="setlog-next"><div><span className="label">NEXT</span><strong>22時に判定画面が開きます</strong><p>Instagram、LINE、もう一日、何も教えない。答えは相手には見えません。</p></div><button className="secondary-button" onClick={openDecision}>夜の判定を見る <span>→</span></button></div>}
             {state.setlogStatus === "error" && <button className="secondary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
             <button className="text-button safety-link" onClick={() => setSafetyOpen(true)}>困ったときは、安全メニューへ <span>＋</span></button>
@@ -705,7 +704,7 @@ export default function Home() {
 
         {state.phase === "decision" && selectedCandidate && (
           <section className="page-section narrow-section decision-section">
-            <div className="decision-top"><div><p className="eyebrow">05 / Private decision</p><h2>今日の相手に、<br /><em>何を教える？</em></h2></div><div className="decision-time"><strong>22:00</strong><span>回答受付中</span></div></div>
+            <div className="decision-top"><div><p className="eyebrow">06 / 夜の内緒の判定</p><h2>今日の相手に、<br /><em>何を教える？</em></h2></div><div className="decision-time"><strong>22:00</strong><span>回答受付中</span></div></div>
             <p className="section-lede">選択内容は相手に見えません。お互いが選んだものだけ、23時に開示されます。</p>
             <div className="decision-options">{(["instagram", "line", "continue", "none"] as DecisionOption[]).map((option) => <button key={option} className={`decision-option ${state.decision[option] ? "is-selected" : ""} ${option === "none" ? "is-muted" : ""}`} onClick={() => toggleDecision(option)} aria-pressed={state.decision[option]}><span className="decision-icon">{option === "instagram" ? "◎" : option === "line" ? "▣" : option === "continue" ? "↻" : "—"}</span><span><strong>{optionLabels[option]}</strong><small>{option === "instagram" ? "お互いに選んだら開示" : option === "line" ? "お互いに選んだら開示" : option === "continue" ? "次回、もう一日だけ共有" : "相手には何も伝えない"}</small></span><span className="select-mark">{state.decision[option] ? "✓" : "＋"}</span></button>)}</div>
             <div className="privacy-note"><span>非公開</span><p>相手の回答内容、片方だけが希望した事実、希望順位は表示されません。</p></div>
@@ -716,10 +715,10 @@ export default function Home() {
 
         {state.phase === "result" && selectedCandidate && state.result && (
           <section className="page-section result-section">
-            <div className="result-stamp">23:00 / RESULT</div>
-            {state.result.kind === "disclosed" && <><p className="eyebrow">06 / A quiet yes</p><h2>一致したものだけ、<br /><em>開きました。</em></h2><p className="section-lede">{selectedCandidate.displayName}さんと、次の連絡先が一致しました。ここからは二人のペースで。</p><div className="disclosed-list">{state.result.items.map((item) => <div className="disclosed-item" key={item}><span className="disclosed-icon">{item === "instagram" ? "◎" : "▣"}</span><strong>{optionLabels[item]}</strong><span className="disclosed-check">双方一致 ✓</span></div>)}</div></>}
-            {state.result.kind === "continued" && <><p className="eyebrow">06 / One more day</p><h2>もう一日だけ、<br /><em>続けてみる。</em></h2><p className="section-lede">連絡先を交換する前に、もう一度だけSetlogで一日を共有します。次回開催の案内をお送りします。</p><div className="result-note result-note--sage"><span>↻</span><div><strong>次回のDay Pair候補にしました</strong><p>相手には、あなたの回答内容は表示されません。</p></div></div></>}
-            {state.result.kind === "ended" && <><p className="eyebrow">06 / Day Pair complete</p><h2>今回のDay Pairは、<br /><em>ここで終了です。</em></h2><p className="section-lede">ご参加ありがとうございました。相手の選択内容や不成立の理由は、お互いに表示されません。</p><div className="result-note"><span>○</span><div><strong>後腐れなく、今日はここまで</strong><p>独自アプリ上では相手を再推薦しません。</p></div></div></>}
+            <div className="result-stamp">23:00 / 結果</div>
+            {state.result.kind === "disclosed" && <><p className="eyebrow">07 / 一致したもの</p><h2>一致したものだけ、<br /><em>開きました。</em></h2><p className="section-lede">{selectedCandidate.displayName}さんと、次の連絡先が一致しました。ここからは二人のペースで。</p><div className="disclosed-list">{state.result.items.map((item) => <div className="disclosed-item" key={item}><span className="disclosed-icon">{item === "instagram" ? "◎" : "▣"}</span><strong>{optionLabels[item]}</strong><span className="disclosed-check">双方一致 ✓</span></div>)}</div></>}
+            {state.result.kind === "continued" && <><p className="eyebrow">07 / もう一日</p><h2>もう一日だけ、<br /><em>続けてみる。</em></h2><p className="section-lede">連絡先を交換する前に、もう一度だけSetlogで一日を共有します。次回開催の案内をお送りします。</p><div className="result-note result-note--sage"><span>↻</span><div><strong>次回のDay Pair候補にしました</strong><p>相手には、あなたの回答内容は表示されません。</p></div></div></>}
+            {state.result.kind === "ended" && <><p className="eyebrow">07 / Day Pair完了</p><h2>今回のDay Pairは、<br /><em>ここで終了です。</em></h2><p className="section-lede">ご参加ありがとうございました。相手の選択内容や不成立の理由は、お互いに表示されません。</p><div className="result-note"><span>○</span><div><strong>後腐れなく、今日はここまで</strong><p>独自アプリ上では相手を再推薦しません。</p></div></div></>}
             <div className="result-footer"><button className="primary-button" onClick={resetDemo}>次の土曜を見る <span>→</span></button><span>また参加したくなったら、いつでも戻ってきてください。</span></div>
           </section>
         )}
@@ -729,7 +728,7 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="app-footer"><span>setlog match / Aoyama edition</span><span>このアプリはデモ版です。実際の個人情報は扱いません。</span></footer>
+      <footer className="app-footer"><span>setlog match / SATURDAY ISSUE 001</span><span>青学生限定のデモ版。実際の個人情報は扱いません。</span></footer>
 
       {safetyOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setSafetyOpen(false)}>
