@@ -38,8 +38,18 @@ test("does not report zero when the waiting-count database is unavailable", asyn
   assert.deepEqual(await response.json(), { error: "WAITING_COUNT_UNAVAILABLE" });
 });
 
+test("requires an Aoyama student email for registration", async () => {
+  const response = await render("/api/events/next-saturday/registrations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ lineRegistered: true }),
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "AOYAMA_EMAIL_REQUIRED" });
+});
+
 test("keeps the MVP free of starter preview artifacts", async () => {
-  const [page, layout, packageJson, schema, db, waitingRoute, registrationRoute, session, envExample, migration] = await Promise.all([
+  const [page, layout, packageJson, schema, db, waitingRoute, registrationRoute, session, schoolEmail, envExample, migration] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -48,6 +58,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
     readFile(new URL("../app/api/events/[eventKey]/waiting-count/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/events/[eventKey]/registrations/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/session.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/school-email.ts", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0000_nosy_stellaris.sql", import.meta.url), "utf8"),
   ]);
@@ -66,6 +77,8 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /明日はマッチング！/);
   assert.match(page, /setlog-match-mvp-state-v3/);
   assert.match(page, /line-modal/);
+  assert.match(page, /schoolEmail/);
+  assert.match(page, /isAoyamaStudentEmail/);
   assert.match(page, /waitingCount/);
   assert.match(page, /waiting-count/);
   assert.match(page, /registrations/);
@@ -77,7 +90,10 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(waitingRoute, /getWaitingCount/);
   assert.match(registrationRoute, /onConflictDoUpdate/);
   assert.match(registrationRoute, /getOrCreateSessionId/);
+  assert.match(registrationRoute, /AOYAMA_EMAIL_REQUIRED/);
   assert.match(session, /HttpOnly/);
+  assert.match(schoolEmail, /aoyama\\.jp/);
+  assert.match(schoolEmail, /aoyama\\.ac\\.jp/);
   assert.match(envExample, /DATABASE_URL=/);
   assert.match(migration, /CREATE TABLE "events"/);
   assert.match(migration, /CREATE TABLE "event_registrations"/);
