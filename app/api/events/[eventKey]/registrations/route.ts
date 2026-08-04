@@ -3,6 +3,7 @@ import { getDb } from "../../../../../db";
 import { eventRegistrations } from "../../../../../db/schema";
 import { ensureEvent, getWaitingCount } from "../../../../../lib/event-registration";
 import { getOrCreateSessionId, setSessionCookie } from "../../../../../lib/session";
+import { normalizeAoyamaEmail } from "../../../../../lib/school-email";
 
 export const runtime = "nodejs";
 
@@ -11,10 +12,14 @@ export async function POST(
   { params }: { params: Promise<{ eventKey: string }> },
 ) {
   const { eventKey } = await params;
-  const body = await request.json().catch(() => null) as { lineRegistered?: boolean } | null;
+  const body = await request.json().catch(() => null) as { lineRegistered?: boolean; schoolEmail?: unknown } | null;
 
   if (body?.lineRegistered !== true) {
     return NextResponse.json({ error: "LINE_REGISTRATION_REQUIRED" }, { status: 400 });
+  }
+
+  if (!normalizeAoyamaEmail(body.schoolEmail)) {
+    return NextResponse.json({ error: "AOYAMA_EMAIL_REQUIRED" }, { status: 400 });
   }
 
   try {
