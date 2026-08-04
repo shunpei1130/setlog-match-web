@@ -597,6 +597,7 @@ export default function Home() {
                 inputMode="email"
                 autoComplete="email"
                 value={schoolEmail}
+                required
                 onChange={(event) => {
                   setSchoolEmail(event.target.value);
                   if (state.notice) updateState({ notice: null });
