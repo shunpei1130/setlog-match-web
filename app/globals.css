@@ -490,6 +490,12 @@ h1 em, h2 em { color: inherit; font-style: normal; }
 .line-setup-card__body p { margin: 5px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
 .line-setup-card .secondary-button { min-height: 38px; padding: 0 14px; gap: 8px; font-size: 11px; white-space: nowrap; }
 .line-setup-card__check { color: var(--ink); font-size: 18px; font-weight: 700; }
+.school-email-field { display: grid; gap: 8px; margin: 18px 0; }
+.school-email-field label { color: var(--ink); font-size: 12px; font-weight: 600; }
+.school-email-field input { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font-size: 14px; }
+.school-email-field input::placeholder { color: #a1a1a6; }
+.school-email-field input:focus { border-color: var(--ink); outline: none; }
+.school-email-field small { color: var(--ink-soft); font-size: 10px; line-height: 1.6; }
 .line-modal {
   width: min(440px, 100%);
   padding: 30px;
