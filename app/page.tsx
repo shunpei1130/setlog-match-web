@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
+import { isAoyamaStudentEmail, normalizeAoyamaEmail } from "../lib/school-email";
 
 type AppPhase =
   | "landing"
@@ -234,6 +235,7 @@ export default function Home() {
   const [lineConnecting, setLineConnecting] = useState(false);
   const [participationSubmitting, setParticipationSubmitting] = useState(false);
   const [waitingCount, setWaitingCount] = useState<WaitingCountState>({ status: "loading", count: null });
+  const [schoolEmail, setSchoolEmail] = useState("");
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -302,11 +304,17 @@ export default function Home() {
     setSafetyError("");
     setLineModalOpen(false);
     setLineConnecting(false);
+    setSchoolEmail("");
   };
 
   const handleParticipation = async () => {
     if (!state.consent.age || !state.consent.rules) {
       updateState({ notice: "年齢確認と安全ルールへの同意が必要です。" });
+      return;
+    }
+    const normalizedSchoolEmail = normalizeAoyamaEmail(schoolEmail);
+    if (!normalizedSchoolEmail || !isAoyamaStudentEmail(normalizedSchoolEmail)) {
+      updateState({ notice: "青学のメールアドレス（@aoyama.jp または @aoyama.ac.jp）を入力してください。" });
       return;
     }
     if (state.lineRegistration.status !== "registered") {
@@ -319,7 +327,7 @@ export default function Home() {
       const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineRegistered: true }),
+        body: JSON.stringify({ lineRegistered: true, schoolEmail: normalizedSchoolEmail }),
       });
       if (!response.ok) throw new Error("Registration unavailable");
       const payload = await response.json() as { count?: unknown; updatedAt?: string };
@@ -580,6 +588,23 @@ export default function Home() {
               <div className="avatar avatar--you">YU</div>
               <div><span className="label">あなたのプロフィール</span><strong>{state.profile.displayName} / {state.profile.year}</strong><p>{state.profile.purpose}</p></div>
               <span className="verified-badge">青学生 ✓</span>
+            </div>
+            <div className="school-email-field">
+              <label htmlFor="school-email">青学のメールアドレス</label>
+              <input
+                id="school-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={schoolEmail}
+                onChange={(event) => {
+                  setSchoolEmail(event.target.value);
+                  if (state.notice) updateState({ notice: null });
+                }}
+                placeholder="yourname@aoyama.jp"
+                aria-describedby="school-email-help"
+              />
+              <small id="school-email-help">@aoyama.jp または @aoyama.ac.jp のメールアドレスが必要です。入力内容はDBへ保存しません。</small>
             </div>
             <div className="check-list">
               <label className={`check-row ${state.consent.age ? "is-checked" : ""}`}>
