@@ -1,16 +1,3 @@
-ALTER TABLE "events" ADD COLUMN "capacity" integer DEFAULT 100 NOT NULL;--> statement-breakpoint
-ALTER TABLE "events" ADD COLUMN "waiting_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
-UPDATE "events" AS e
-SET "waiting_count" = counts.total
-FROM (
-	SELECT "event_id", COUNT(*)::integer AS total
-	FROM "event_registrations"
-	WHERE "status" = 'waiting' AND "line_status" = 'registered'
-	GROUP BY "event_id"
-) AS counts
-WHERE e."id" = counts."event_id";--> statement-breakpoint
-ALTER TABLE "events" ADD CONSTRAINT "events_capacity_positive" CHECK ("capacity" > 0);--> statement-breakpoint
-ALTER TABLE "events" ADD CONSTRAINT "events_waiting_count_nonnegative" CHECK ("waiting_count" >= 0);--> statement-breakpoint
 CREATE OR REPLACE FUNCTION "public"."register_event_waiting"(
 	p_event_id uuid,
 	p_session_id uuid
@@ -65,4 +52,4 @@ BEGIN
 
 	RETURN QUERY SELECT true, event_waiting_count + 1, event_capacity;
 END;
-$function$;--> statement-breakpoint
+$function$;
