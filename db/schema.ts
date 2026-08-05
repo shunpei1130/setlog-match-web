@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -18,6 +19,8 @@ export const events = pgTable("events", {
   eventKey: text("event_key").notNull().unique(),
   startsAt: timestamp("starts_at", { withTimezone: true, mode: "date" }).notNull(),
   status: eventStatus("status").notNull().default("open"),
+  capacity: integer("capacity").notNull().default(100),
+  waitingCount: integer("waiting_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 

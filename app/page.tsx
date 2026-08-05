@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
+import { isLocalTestBrowser } from "../lib/local-test";
 import { isAoyamaStudentEmail, normalizeAoyamaEmail } from "../lib/school-email";
 
 type AppPhase =
@@ -19,9 +20,12 @@ type DecisionOption = "instagram" | "line" | "continue" | "none";
 type PairStatus = "active" | "ended" | "blocked";
 type SetlogStatus = "idle" | "connecting" | "connected" | "error";
 type LineRegistrationStatus = "not_started" | "registered";
+type LineRegistrationSource = "none" | "line_mock" | "local_test";
 type WaitingCountState = {
   status: "loading" | "ready" | "error";
   count: number | null;
+  capacity: number | null;
+  remaining: number | null;
   updatedAt?: string;
 };
 
@@ -71,6 +75,7 @@ type StoredState = {
   eventKey: string;
   lineRegistration: {
     status: LineRegistrationStatus;
+    source: LineRegistrationSource;
     reminderScheduled: boolean;
   };
   consent: {
@@ -151,6 +156,7 @@ const createInitialState = (): StoredState => ({
   eventKey: DEMO_EVENT_KEY,
   lineRegistration: {
     status: "not_started",
+    source: "none",
     reminderScheduled: false,
   },
   consent: { age: false, rules: false },
@@ -228,21 +234,40 @@ export default function Home() {
   const [state, setState] = useState<StoredState>(createInitialState);
   const [hydrated, setHydrated] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDetail, setReportDetail] = useState("");
   const [safetyError, setSafetyError] = useState("");
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [lineConnecting, setLineConnecting] = useState(false);
   const [participationSubmitting, setParticipationSubmitting] = useState(false);
-  const [waitingCount, setWaitingCount] = useState<WaitingCountState>({ status: "loading", count: null });
+  const [waitingCount, setWaitingCount] = useState<WaitingCountState>({
+    status: "loading",
+    count: null,
+    capacity: null,
+    remaining: null,
+  });
   const [schoolEmail, setSchoolEmail] = useState("");
+  const localTest = hydrated && isLocalTestBrowser();
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Partial<StoredState>;
-        startTransition(() => setState({ ...createInitialState(), ...parsed }));
+        const initial = createInitialState();
+        const storedLineRegistration = parsed.lineRegistration;
+        const source = storedLineRegistration?.source
+          ?? (storedLineRegistration?.status === "registered" ? "line_mock" : "none");
+        startTransition(() => setState({
+          ...initial,
+          ...parsed,
+          lineRegistration: {
+            ...initial.lineRegistration,
+            ...storedLineRegistration,
+            source,
+          },
+        }));
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
@@ -266,11 +291,29 @@ export default function Home() {
           cache: "no-store",
         });
         if (!response.ok) throw new Error("Waiting count unavailable");
-        const payload = await response.json() as { count?: unknown; updatedAt?: string };
-        if (typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0) {
+        const payload = await response.json() as {
+          count?: unknown;
+          capacity?: unknown;
+          remaining?: unknown;
+          updatedAt?: string;
+        };
+        if (
+          typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0
+          || typeof payload.capacity !== "number" || !Number.isInteger(payload.capacity) || payload.capacity <= 0
+          || typeof payload.remaining !== "number" || !Number.isInteger(payload.remaining) || payload.remaining < 0
+          || payload.remaining !== Math.max(0, payload.capacity - payload.count)
+        ) {
           throw new Error("Invalid waiting count");
         }
-        if (!cancelled) setWaitingCount({ status: "ready", count: payload.count, updatedAt: payload.updatedAt });
+        if (!cancelled) {
+          setWaitingCount({
+            status: "ready",
+            count: payload.count,
+            capacity: payload.capacity,
+            remaining: payload.remaining,
+            updatedAt: payload.updatedAt,
+          });
+        }
       } catch {
         if (!cancelled) setWaitingCount((previous) => ({ ...previous, status: "error" }));
       }
@@ -299,6 +342,7 @@ export default function Home() {
     window.localStorage.removeItem(STORAGE_KEY);
     setState(createInitialState());
     setSafetyOpen(false);
+    setUtilityMenuOpen(false);
     setReportReason("");
     setReportDetail("");
     setSafetyError("");
@@ -313,28 +357,60 @@ export default function Home() {
       return;
     }
     const normalizedSchoolEmail = normalizeAoyamaEmail(schoolEmail);
-    if (!normalizedSchoolEmail || !isAoyamaStudentEmail(normalizedSchoolEmail)) {
+    if (!localTest && (!normalizedSchoolEmail || !isAoyamaStudentEmail(normalizedSchoolEmail))) {
       updateState({ notice: "青学のメールアドレス（@aoyama.jp または @aoyama.ac.jp）を入力してください。" });
       return;
     }
-    if (state.lineRegistration.status !== "registered") {
+    if (!localTest && state.lineRegistration.status !== "registered") {
       updateState({ notice: "事前登録にはLINE登録が必要です。" });
-      setLineModalOpen(true);
       return;
     }
+    const localTestRegistration = localTest;
     setParticipationSubmitting(true);
     try {
       const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineRegistered: true, schoolEmail: normalizedSchoolEmail }),
+        body: JSON.stringify({
+          lineRegistered: state.lineRegistration.source === "line_mock",
+          lineTestBypass: localTestRegistration,
+          schoolEmailTestBypass: localTestRegistration,
+          ...(normalizedSchoolEmail ? { schoolEmail: normalizedSchoolEmail } : {}),
+        }),
       });
-      if (!response.ok) throw new Error("Registration unavailable");
-      const payload = await response.json() as { count?: unknown; updatedAt?: string };
-      if (typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0) {
+      const payload = await response.json().catch(() => null) as {
+        error?: unknown;
+        count?: unknown;
+        capacity?: unknown;
+        remaining?: unknown;
+        updatedAt?: string;
+      } | null;
+      if (response.status === 409 && payload?.error === "EVENT_FULL") {
+        setWaitingCount((previous) => ({
+          ...previous,
+          status: "ready",
+          count: typeof payload.count === "number" ? payload.count : previous.count,
+          capacity: typeof payload.capacity === "number" ? payload.capacity : previous.capacity,
+          remaining: 0,
+        }));
+        updateState({ notice: "初回募集は定員に達しました。今回は受付を終了しました。" });
+        return;
+      }
+      if (!response.ok || !payload) throw new Error("Registration unavailable");
+      if (
+        typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0
+        || typeof payload.capacity !== "number" || !Number.isInteger(payload.capacity) || payload.capacity <= 0
+        || typeof payload.remaining !== "number" || !Number.isInteger(payload.remaining) || payload.remaining < 0
+      ) {
         throw new Error("Invalid registration response");
       }
-      setWaitingCount({ status: "ready", count: payload.count, updatedAt: payload.updatedAt });
+      setWaitingCount({
+        status: "ready",
+        count: payload.count,
+        capacity: payload.capacity,
+        remaining: payload.remaining,
+        updatedAt: payload.updatedAt,
+      });
       updateState({ participation: true, matchingStarted: false, phase: "waiting", notice: null });
     } catch {
       updateState({ notice: "事前登録を保存できませんでした。通信を確認して、もう一度お試しください。" });
@@ -346,8 +422,15 @@ export default function Home() {
   const waitingCountText = waitingCount.status === "error"
     ? "人数を取得できません"
     : waitingCount.count !== null
-      ? `現在 ${waitingCount.count}人`
+      ? `現在${waitingCount.count}人`
       : "人数を確認中…";
+
+  const remainingSlotsText = waitingCount.status === "error"
+    ? "残り枠を取得できません"
+    : waitingCount.remaining !== null
+      ? `残り${waitingCount.remaining}枠`
+      : "残り枠を確認中…";
+  const eventIsFull = waitingCount.status === "ready" && waitingCount.remaining === 0;
 
   const completeLineRegistration = async () => {
     setLineConnecting(true);
@@ -355,7 +438,7 @@ export default function Home() {
       await mockLineAdapter.startRegistration();
       await mockLineAdapter.scheduleReminder(state.eventKey);
       updateState({
-        lineRegistration: { status: "registered", reminderScheduled: true },
+        lineRegistration: { status: "registered", source: "line_mock", reminderScheduled: true },
         notice: null,
       });
       setLineModalOpen(false);
@@ -364,6 +447,11 @@ export default function Home() {
     } finally {
       setLineConnecting(false);
     }
+  };
+
+  const startLineRegistration = () => {
+    updateState({ notice: null });
+    setLineModalOpen(true);
   };
 
   const startMatching = () => {
@@ -496,16 +584,36 @@ export default function Home() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={resetDemo} aria-label="Setlog Matchの最初に戻る">
+        <div className="brand" aria-label="Setlog Match">
           <span className="brand-mark">S</span>
           <span>
             <strong>setlog match</strong>
             <small>SATURDAY ISSUE / 001</small>
           </span>
-        </button>
-        <button className="reset-button" onClick={resetDemo}>
-          最初からやり直す
-        </button>
+        </div>
+        <div className="utility-menu-wrap">
+          <button
+            className="menu-button"
+            type="button"
+            aria-label="メニューを開く"
+            aria-expanded={utilityMenuOpen}
+            onClick={() => setUtilityMenuOpen((open) => !open)}
+          >
+            <span aria-hidden="true">•••</span>
+          </button>
+          {utilityMenuOpen && (
+            <div className="utility-menu" role="menu">
+              {state.phase !== "landing" && (
+                <button type="button" role="menuitem" onClick={() => { setUtilityMenuOpen(false); setSafetyOpen(true); }}>
+                  安全メニュー
+                </button>
+              )}
+              <button type="button" role="menuitem" onClick={resetDemo}>
+                最初からやり直す
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       <main className="app-main">
@@ -536,16 +644,20 @@ export default function Home() {
                 写真で選ぶ前に、その人の普通の土曜日を見る。Setlogで一日を共有して、夜にお互いの気持ちを静かに確かめます。
               </p>
               <div className="hero-actions">
-                <button className="primary-button" onClick={() => updateState({ phase: "participation", notice: null })}>
-                  次の土曜に事前登録する <span>↗</span>
+                <button
+                  className="primary-button"
+                  onClick={() => updateState({ phase: "participation", notice: null })}
+                  disabled={eventIsFull && !state.participation}
+                >
+                  {eventIsFull && !state.participation ? "初回募集は満員です" : "次の土曜に事前登録する"} <span>↗</span>
                 </button>
-                <span className="micro-copy">登録無料 / 18歳以上 / 青学生限定</span>
+                <span className="micro-copy">初回100人限定 / 18歳以上 / 青学生限定</span>
               </div>
             </div>
 
             <div className="event-card">
               <div className="event-card__top">
-                <span className="status-pill"><span className="status-dot" />受付中</span>
+                <span className="status-pill"><span className="status-dot" />{eventIsFull ? "受付終了" : "受付中"}</span>
                 <span className="event-number">ISSUE 01</span>
               </div>
               <div className="date-lockup">
@@ -554,9 +666,9 @@ export default function Home() {
                 <span>12:00 / 開場</span>
               </div>
               <div className="event-card__count" aria-live="polite">
-                <span className="label">現在の待機人数</span>
-                <strong>{waitingCountText}</strong>
-                <small>LINE登録済みの事前参加者</small>
+                <span className="label">初回募集 / 100人限定</span>
+                <strong>{remainingSlotsText}</strong>
+                <small>{waitingCountText} / LINE登録済みの参加者</small>
               </div>
               <div className="event-card__bottom">
                 <div>
@@ -588,24 +700,31 @@ export default function Home() {
               <div><span className="label">あなたのプロフィール</span><strong>{state.profile.displayName} / {state.profile.year}</strong><p>{state.profile.purpose}</p></div>
               <span className="verified-badge">青学生 ✓</span>
             </div>
-            <div className="school-email-field">
-              <label htmlFor="school-email">青学のメールアドレス</label>
-              <input
-                id="school-email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={schoolEmail}
-                required
-                onChange={(event) => {
-                  setSchoolEmail(event.target.value);
-                  if (state.notice) updateState({ notice: null });
-                }}
-                placeholder="yourname@aoyama.jp"
-                aria-describedby="school-email-help"
-              />
-              <small id="school-email-help">@aoyama.jp または @aoyama.ac.jp のメールアドレスが必要です。入力内容はDBへ保存しません。</small>
-            </div>
+            {localTest ? (
+              <div className="local-test-note" role="status">
+                <span className="local-test-note__mark">LOCAL</span>
+                <div><strong>ローカルテスト中</strong><p>青学メールとLINE登録を省略して、参加フローを確認できます。</p></div>
+              </div>
+            ) : (
+              <div className="school-email-field">
+                <label htmlFor="school-email">青学のメールアドレス</label>
+                <input
+                  id="school-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={schoolEmail}
+                  required
+                  onChange={(event) => {
+                    setSchoolEmail(event.target.value);
+                    if (state.notice) updateState({ notice: null });
+                  }}
+                  placeholder="yourname@aoyama.jp"
+                  aria-describedby="school-email-help"
+                />
+                <small id="school-email-help">@aoyama.jp または @aoyama.ac.jp のメールアドレスが必要です。入力内容はDBへ保存しません。</small>
+              </div>
+            )}
             <div className="check-list">
               <label className={`check-row ${state.consent.age ? "is-checked" : ""}`}>
                 <input type="checkbox" checked={state.consent.age} onChange={(event) => updateState({ consent: { ...state.consent, age: event.target.checked }, notice: null })} />
@@ -618,16 +737,18 @@ export default function Home() {
                 <span><strong>安全ルールに同意します</strong><small>嫌なことは断ってよい。いつでもブロック・通報できます。</small></span>
               </label>
             </div>
-            <div className={`line-setup-card ${state.lineRegistration.status === "registered" ? "is-registered" : ""}`}>
+            {!localTest && <div className={`line-setup-card ${state.lineRegistration.status === "registered" ? "is-registered" : ""}`}>
               <div className="line-setup-card__icon">LINE</div>
               <div className="line-setup-card__body">
                 <span className="label">参加に必要です</span>
-                <strong>{state.lineRegistration.status === "registered" ? "LINE登録済み" : "LINEを登録して、前日の案内を受け取る"}</strong>
-                <p>{state.lineRegistration.status === "registered" ? "金曜21:00に「明日はマッチング！」の案内を送る予定です。" : "前日21:00に参加アンケートをお送りします。"}</p>
+                <strong>{state.lineRegistration.status === "registered" ? "LINE登録済み" : "LINEを登録して、金曜の案内を受け取る"}</strong>
+                <p>{state.lineRegistration.status === "registered" ? "金曜21:00に「明日はマッチング！」の案内を送る予定です。" : "金曜21:00に参加アンケートをお送りします。"}</p>
               </div>
-              {state.lineRegistration.status === "registered" ? <span className="line-setup-card__check">✓</span> : <button className="secondary-button" type="button" onClick={() => setLineModalOpen(true)}>LINE登録する <span>→</span></button>}
-            </div>
-            <button className="primary-button full-width" onClick={handleParticipation} disabled={participationSubmitting}>{participationSubmitting ? "事前登録を保存中…" : "参加登録を完了する"} <span>→</span></button>
+              {state.lineRegistration.status === "registered" && <span className="line-setup-card__check">✓</span>}
+            </div>}
+            <button className="primary-button full-width" onClick={localTest || state.lineRegistration.status === "registered" ? handleParticipation : startLineRegistration} disabled={participationSubmitting}>
+              {participationSubmitting ? "事前登録を保存中…" : localTest ? "テスト参加を開始する" : state.lineRegistration.status === "registered" ? "参加登録を完了する" : "LINE登録を始める"} <span>→</span>
+            </button>
           </section>
         )}
 
@@ -640,8 +761,8 @@ export default function Home() {
               <div className="waiting-card__top"><span className="status-pill status-pill--light"><span className="status-dot" />事前登録済み</span><span className="event-number">NEXT SATURDAY</span></div>
               <div className="waiting-card__date"><span>毎週土曜</span><strong>12:00</strong><small>マッチング開始</small></div>
               <div className="waiting-card__copy"><strong>土曜になったら、ここから開始</strong><p>開始ボタンを押すまで、候補者や相手の情報は表示されません。</p></div>
-              <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>前日21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
-              <div className="waiting-card__count" aria-live="polite"><span className="label">現在の待機人数</span><strong>{waitingCountText}</strong><p>次回土曜に参加予定の青学生です。</p></div>
+              <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>金曜21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
+              <div className="waiting-card__count" aria-live="polite"><span className="label">初回募集 / 100人限定</span><strong>{remainingSlotsText}</strong><p>{waitingCountText}。次回土曜に参加予定の青学生です。</p></div>
             </div>
             <button className="primary-button full-width" onClick={startMatching}>土曜のマッチングを開始する <span>→</span></button>
             <p className="waiting-note">デモ版では曜日に関係なく、開始ボタンで土曜の状態を再現できます。</p>
@@ -686,7 +807,7 @@ export default function Home() {
             <div className="pair-intro"><div><h2>今日の相手は、<br /><em>{selectedCandidate.displayName}さん。</em></h2><p>お互いの条件が合ったため、本日のDay Pairになりました。</p></div><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span><i>●</i></div></div>
             <div className="pair-timeline"><div className="timeline-item is-done"><span>12:00</span><div><strong>Day Pair成立</strong><p>相手に会えたことだけをお知らせしています。</p></div></div><div className="timeline-item is-current"><span>12:00 — 22:00</span><div><strong>Setlogで一日を共有</strong><p>連絡先はまだ聞かない。今日の普通を見せ合う時間です。</p></div></div><div className="timeline-item"><span>22:00</span><div><strong>非公開判定</strong><p>続けたいものを、アプリだけで選びます。</p></div></div></div>
             <div className="rule-callout"><span>✳</span><p><strong>このDay Pairは本日23時に終了します。</strong><br />続けるかどうかは、夜にお互いが非公開で選択します。</p></div>
-            <div className="pair-actions"><button className="primary-button" onClick={() => updateState({ phase: "setlog", notice: null })}>Setlogにつなぐ <span>↗</span></button><button className="text-button" onClick={() => setSafetyOpen(true)}>安全メニュー <span>＋</span></button></div>
+            <div className="pair-actions"><button className="primary-button full-width" onClick={() => updateState({ phase: "setlog", notice: null })}>Setlogにつなぐ <span>↗</span></button></div>
           </section>
         )}
 
@@ -696,9 +817,8 @@ export default function Home() {
             <h2>今日は、<em>一日の共有から。</em></h2>
             <p className="section-lede">Setlogでお互いの土曜日を共有します。連絡先交換の話は、夜の判定までしなくて大丈夫です。</p>
             <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">setlog<span>↗</span></div><span className="status-pill status-pill--light">Day Pairの部屋</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">今日の共有ルーム</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 一日のログ</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>Setlogの準備ができました</strong><p>今日は一日を楽しんでください。22時にここへ戻ってきます。</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>接続できませんでした</strong><p>通信を確認して、もう一度試してください。</p></div> : <div className="setlog-card__action"><p>接続はデモモードで行われます。実際のSetlogは開きません。</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "接続中…" : "Setlogを準備する"}<span>↗</span></button></div>}</div>
-            {state.setlogStatus === "connected" && <div className="setlog-next"><div><span className="label">NEXT</span><strong>22時に判定画面が開きます</strong><p>Instagram、LINE、もう一日、何も教えない。答えは相手には見えません。</p></div><button className="secondary-button" onClick={openDecision}>夜の判定を見る <span>→</span></button></div>}
-            {state.setlogStatus === "error" && <button className="secondary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
-            <button className="text-button safety-link" onClick={() => setSafetyOpen(true)}>困ったときは、安全メニューへ <span>＋</span></button>
+            {state.setlogStatus === "connected" && <><div className="setlog-next"><div><span className="label">NEXT</span><strong>22時に判定画面が開きます</strong><p>Instagram、LINE、もう一日、何も教えない。答えは相手には見えません。</p></div></div><button className="primary-button full-width" onClick={openDecision}>夜の判定へ進む <span>→</span></button></>}
+            {state.setlogStatus === "error" && <button className="primary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
           </section>
         )}
 
@@ -709,7 +829,6 @@ export default function Home() {
             <div className="decision-options">{(["instagram", "line", "continue", "none"] as DecisionOption[]).map((option) => <button key={option} className={`decision-option ${state.decision[option] ? "is-selected" : ""} ${option === "none" ? "is-muted" : ""}`} onClick={() => toggleDecision(option)} aria-pressed={state.decision[option]}><span className="decision-icon">{option === "instagram" ? "◎" : option === "line" ? "▣" : option === "continue" ? "↻" : "—"}</span><span><strong>{optionLabels[option]}</strong><small>{option === "instagram" ? "お互いに選んだら開示" : option === "line" ? "お互いに選んだら開示" : option === "continue" ? "次回、もう一日だけ共有" : "相手には何も伝えない"}</small></span><span className="select-mark">{state.decision[option] ? "✓" : "＋"}</span></button>)}</div>
             <div className="privacy-note"><span>非公開</span><p>相手の回答内容、片方だけが希望した事実、希望順位は表示されません。</p></div>
             <button className="primary-button full-width" onClick={confirmDecision}>この内容で送信する <span>→</span></button>
-            <button className="text-button safety-link" onClick={() => setSafetyOpen(true)}>今日はここまでにする <span>＋</span></button>
           </section>
         )}
 
@@ -719,7 +838,7 @@ export default function Home() {
             {state.result.kind === "disclosed" && <><p className="eyebrow">07 / 一致したもの</p><h2>一致したものだけ、<br /><em>開きました。</em></h2><p className="section-lede">{selectedCandidate.displayName}さんと、次の連絡先が一致しました。ここからは二人のペースで。</p><div className="disclosed-list">{state.result.items.map((item) => <div className="disclosed-item" key={item}><span className="disclosed-icon">{item === "instagram" ? "◎" : "▣"}</span><strong>{optionLabels[item]}</strong><span className="disclosed-check">双方一致 ✓</span></div>)}</div></>}
             {state.result.kind === "continued" && <><p className="eyebrow">07 / もう一日</p><h2>もう一日だけ、<br /><em>続けてみる。</em></h2><p className="section-lede">連絡先を交換する前に、もう一度だけSetlogで一日を共有します。次回開催の案内をお送りします。</p><div className="result-note result-note--sage"><span>↻</span><div><strong>次回のDay Pair候補にしました</strong><p>相手には、あなたの回答内容は表示されません。</p></div></div></>}
             {state.result.kind === "ended" && <><p className="eyebrow">07 / Day Pair完了</p><h2>今回のDay Pairは、<br /><em>ここで終了です。</em></h2><p className="section-lede">ご参加ありがとうございました。相手の選択内容や不成立の理由は、お互いに表示されません。</p><div className="result-note"><span>○</span><div><strong>後腐れなく、今日はここまで</strong><p>独自アプリ上では相手を再推薦しません。</p></div></div></>}
-            <div className="result-footer"><button className="primary-button" onClick={resetDemo}>次の土曜を見る <span>→</span></button><span>また参加したくなったら、いつでも戻ってきてください。</span></div>
+            <div className="result-footer"><button className="primary-button full-width" onClick={resetDemo}>次の土曜を見る <span>→</span></button><span>また参加したくなったら、いつでも戻ってきてください。</span></div>
           </section>
         )}
 
@@ -733,7 +852,7 @@ export default function Home() {
       {safetyOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setSafetyOpen(false)}>
           <section className="safety-modal" role="dialog" aria-modal="true" aria-labelledby="safety-title" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-top"><div><span className="eyebrow">Safety menu</span><h2 id="safety-title">困ったときは、<br /><em>すぐに離れて大丈夫。</em></h2></div><button className="close-button" onClick={() => setSafetyOpen(false)} aria-label="安全メニューを閉じる">×</button></div>
+            <div className="modal-top"><div><span className="eyebrow">安全メニュー</span><h2 id="safety-title">困ったときは、<br /><em>すぐに離れて大丈夫。</em></h2></div><button className="close-button" onClick={() => setSafetyOpen(false)} aria-label="安全メニューを閉じる">×</button></div>
             <p>返信をしなくても、理由を説明しなくても大丈夫です。ブロックすると相手を非表示にし、通報すると運営に共有します。</p>
             <div className="safety-actions"><button className="danger-button" onClick={() => endForSafety("blocked")}>相手をブロックする</button><div className="report-box"><label htmlFor="report-reason">通報理由</label><select id="report-reason" value={reportReason} onChange={(event) => { setReportReason(event.target.value); setSafetyError(""); }}><option value="">選択してください</option><option value="harassment">不快な言動・嫌がらせ</option><option value="identity">プロフィールや所属が不自然</option><option value="solicitation">勧誘・金銭の要求</option><option value="other">その他</option></select><label htmlFor="report-detail">補足（任意）</label><textarea id="report-detail" value={reportDetail} onChange={(event) => setReportDetail(event.target.value)} placeholder="気になったことがあれば書いてください" rows={3} />{safetyError && <p className="field-error" role="alert">{safetyError}</p>}<button className="secondary-button full-width" onClick={submitReport}>運営に通報する <span>→</span></button></div></div>
           </section>
@@ -743,13 +862,12 @@ export default function Home() {
       {lineModalOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setLineModalOpen(false)}>
           <section className="line-modal" role="dialog" aria-modal="true" aria-labelledby="line-modal-title" onClick={(event) => event.stopPropagation()}>
-            <div className="line-modal__mark">LINE</div>
-            <p className="eyebrow">LINE registration</p>
+            <div className="modal-top"><span className="line-modal__mark">LINE</span><button className="close-button" onClick={() => setLineModalOpen(false)} aria-label="LINE登録を閉じる">×</button></div>
+            <p className="eyebrow">LINE登録</p>
             <h2 id="line-modal-title">前日の案内を、<br /><em>LINEで受け取る。</em></h2>
-            <p>事前登録にはLINE登録が必要です。金曜21:00に、明日のマッチングに参加するかを確認するアンケートをお送りします。</p>
+            <p>事前登録にはLINE登録が必要です。金曜21:00に、翌日のマッチングに参加するかを確認するアンケートをお送りします。</p>
             <div className="line-modal__preview"><span>金曜 21:00</span><strong>明日はマッチング！</strong><small>参加する / 今回は見送る</small></div>
             <button className="primary-button full-width" type="button" onClick={completeLineRegistration} disabled={lineConnecting}>{lineConnecting ? "LINE登録を準備中…" : "LINE登録を完了する"}<span>→</span></button>
-            <button className="text-button full-width" type="button" onClick={() => setLineModalOpen(false)}>あとで登録する</button>
           </section>
         </div>
       )}

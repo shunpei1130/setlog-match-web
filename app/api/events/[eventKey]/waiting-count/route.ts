@@ -18,6 +18,8 @@ export async function GET(
     return NextResponse.json({
       eventKey,
       count,
+      capacity: event.capacity,
+      remaining: Math.max(0, event.capacity - count),
       updatedAt: new Date().toISOString(),
     });
   } catch {
