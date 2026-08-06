@@ -685,6 +685,78 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
 .line-modal .modal-top { align-items: center; }
 .line-modal .line-modal__mark { margin: 0; }
 
+@media (max-width: 679px) {
+  html { -webkit-text-size-adjust: 100%; }
+  body { overflow-x: clip; }
+  .topbar { width: 100%; padding: 14px 16px 12px; }
+  .app-main { width: min(calc(100% - 28px), 680px); padding-bottom: 42px; }
+  .progress-panel { margin-top: 14px; }
+  .progress-topline { font-size: 11px; letter-spacing: 0.08em; }
+  .progress-current strong { font-size: 14px; }
+  .progress-current span { font-size: 11px; }
+  .notice { padding: 14px; font-size: 14px; line-height: 1.6; }
+  .landing-grid { gap: 26px; padding-top: 32px; }
+  .hero-copy { gap: 16px; }
+  .hero-lede, .section-lede { font-size: 15px; line-height: 1.75; }
+  .micro-copy { font-size: 11px; line-height: 1.5; }
+  h1, h2 { letter-spacing: -0.055em; }
+  h2 { font-size: clamp(34px, 10vw, 40px); }
+  .eyebrow, .label, .event-number, .count-note, .result-stamp { font-size: 11px; letter-spacing: 0.09em; }
+  .primary-button, .secondary-button, .danger-button { min-height: 56px; padding-inline: 16px; font-size: 14px; }
+  .text-button { min-height: 44px; font-size: 13px; }
+  .hero-copy::after, .event-card::before { display: none; }
+  .event-card { min-height: 270px; padding: 18px; }
+  .date-lockup strong { font-size: clamp(78px, 25vw, 116px); }
+  .event-card__count .label, .waiting-card__count .label { font-size: 11px; }
+  .event-card__count strong, .waiting-card__count strong { font-size: 24px; }
+  .event-card__count small, .waiting-card__count p { font-size: 12px; line-height: 1.6; }
+  .waiting-card { gap: 16px; padding: 16px; }
+  .waiting-card__date span, .waiting-card__date small { font-size: 11px; }
+  .waiting-card__date strong { font-size: 48px; }
+  .waiting-card__copy strong, .waiting-card__line strong { font-size: 16px; }
+  .waiting-card__copy p, .waiting-card__line p { font-size: 13px; line-height: 1.65; }
+  .candidate-grid { gap: 12px; }
+  .candidate-card { grid-template-columns: 76px minmax(0, 1fr); }
+  .candidate-avatar { font-size: 25px; }
+  .candidate-avatar small { font-size: 10px; }
+  .candidate-info { gap: 8px; padding: 14px 12px; }
+  .candidate-name h3 { font-size: 20px; }
+  .candidate-name span, .candidate-meta { font-size: 11px; }
+  .tag-list span { padding: 5px 7px; font-size: 11px; }
+  .candidate-weekend { font-size: 13px; line-height: 1.6; }
+  .ranking-layout { gap: 12px; }
+  .ranking-card { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .mini-avatar { width: 44px; height: 44px; }
+  .ranking-card__body { gap: 9px; }
+  .ranking-card__body strong { font-size: 16px; }
+  .ranking-card__body span { font-size: 11px; }
+  .rank-buttons button { min-height: 48px; font-size: 15px; }
+  .summary-row { min-height: 42px; font-size: 13px; }
+  .rank-summary p { font-size: 12px; line-height: 1.6; }
+  .pair-intro { gap: 12px; }
+  .pair-intro h2 { font-size: clamp(34px, 10vw, 44px); }
+  .pair-intro p { font-size: 13px; line-height: 1.7; }
+  .pair-avatar { width: 68px; height: 68px; font-size: 22px; }
+  .timeline-item { grid-template-columns: 72px minmax(0, 1fr); gap: 8px; min-height: 82px; }
+  .timeline-item::before { left: 78px; }
+  .timeline-item > span { font-size: 11px; }
+  .timeline-item p, .rule-callout p { font-size: 13px; line-height: 1.65; }
+  .setlog-card__action p { font-size: 13px; line-height: 1.65; }
+  .setlog-room p { font-size: 12px; }
+  .connected-message p, .error-message p { font-size: 12px; line-height: 1.6; }
+  .decision-option { min-height: 72px; grid-template-columns: 40px minmax(0, 1fr) 24px; gap: 10px; padding: 13px; }
+  .decision-option strong { font-size: 15px; }
+  .decision-option small, .privacy-note p { font-size: 12px; line-height: 1.55; }
+  .result-section { padding-top: 32px; }
+  .disclosed-item strong { font-size: 15px; }
+  .disclosed-check { color: var(--ink); font-size: 11px; }
+  .result-note p { font-size: 12px; line-height: 1.6; }
+  .app-footer { font-size: 10px; line-height: 1.6; letter-spacing: 0.04em; }
+  .safety-modal, .line-modal { padding: 18px 16px calc(22px + env(safe-area-inset-bottom)); }
+  .safety-modal > p, .line-modal > p:not(.eyebrow) { font-size: 14px; line-height: 1.7; }
+  .report-box textarea { min-height: 96px; }
+}
+
 @media (max-width: 370px) {
   .hero-copy::after { display: none; }
   h1 { font-size: 44px; }

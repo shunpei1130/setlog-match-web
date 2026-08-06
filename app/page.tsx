@@ -282,6 +282,14 @@ export default function Home() {
   }, [hydrated, state]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    const scrollReset = window.setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }, 50);
+    return () => window.clearTimeout(scrollReset);
+  }, [hydrated, state.phase]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const refreshWaitingCount = async () => {
@@ -339,7 +347,11 @@ export default function Home() {
   };
 
   const resetDemo = () => {
-    window.localStorage.removeItem(STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // The visual demo should still be reset when browser storage is unavailable.
+    }
     setState(createInitialState());
     setSafetyOpen(false);
     setUtilityMenuOpen(false);
