@@ -2,6 +2,13 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { isLocalTestBrowser } from "../lib/local-test";
+import {
+  PROFILE_GENDERS,
+  PROFILE_YEARS,
+  type ProfileField,
+  type RegistrationProfile,
+  validateRegistrationProfile,
+} from "../lib/profile";
 import { isAoyamaStudentEmail, normalizeAoyamaEmail } from "../lib/school-email";
 
 type AppPhase =
@@ -30,8 +37,10 @@ type WaitingCountState = {
 };
 
 type UserProfile = {
-  displayName: string;
+  nickname: string;
+  faculty: string;
   year: string;
+  gender: string;
   campus: string;
   purpose: string;
   interests: string[];
@@ -102,8 +111,21 @@ type LineAdapter = {
   scheduleReminder: (eventKey: string) => Promise<void>;
 };
 
-const STORAGE_KEY = "setlog-match-mvp-state-v3";
+const STORAGE_KEY = "setlog-match-mvp-state-v4";
 const DEMO_EVENT_KEY = "next-saturday";
+
+const profileFieldLabels: Record<ProfileField, string> = {
+  nickname: "ニックネーム",
+  faculty: "学部",
+  academicYear: "学年",
+  gender: "性別",
+};
+
+const profileGenderLabels: Record<RegistrationProfile["gender"], string> = {
+  male: "男性",
+  female: "女性",
+  other: "その他",
+};
 
 const candidates: Candidate[] = [
   {
@@ -142,9 +164,11 @@ const candidates: Candidate[] = [
 ];
 
 const initialProfile: UserProfile = {
-  displayName: "ゆうき",
-  year: "2年",
-  campus: "青山キャンパス",
+  nickname: "",
+  faculty: "",
+  year: "",
+  gender: "",
+  campus: "",
   purpose: "まずは一日の過ごし方を知りたい",
   interests: ["カフェ", "音楽", "散歩"],
 };
@@ -241,6 +265,7 @@ export default function Home() {
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [lineConnecting, setLineConnecting] = useState(false);
   const [participationSubmitting, setParticipationSubmitting] = useState(false);
+  const [profileErrors, setProfileErrors] = useState<Partial<Record<ProfileField, string>>>({});
   const [waitingCount, setWaitingCount] = useState<WaitingCountState>({
     status: "loading",
     count: null,
@@ -257,11 +282,16 @@ export default function Home() {
         const parsed = JSON.parse(saved) as Partial<StoredState>;
         const initial = createInitialState();
         const storedLineRegistration = parsed.lineRegistration;
+        const storedProfile = parsed.profile;
         const source = storedLineRegistration?.source
           ?? (storedLineRegistration?.status === "registered" ? "line_mock" : "none");
         startTransition(() => setState({
           ...initial,
           ...parsed,
+          profile: {
+            ...initial.profile,
+            ...storedProfile,
+          },
           lineRegistration: {
             ...initial.lineRegistration,
             ...storedLineRegistration,
@@ -360,10 +390,46 @@ export default function Home() {
     setSafetyError("");
     setLineModalOpen(false);
     setLineConnecting(false);
+    setProfileErrors({});
     setSchoolEmail("");
   };
 
+  const updateProfile = (field: "nickname" | "faculty" | "year" | "gender", value: string) => {
+    setState((previous) => ({
+      ...previous,
+      profile: { ...previous.profile, [field]: value },
+      notice: null,
+    }));
+    const apiField: ProfileField = field === "year" ? "academicYear" : field;
+    setProfileErrors((previous) => {
+      if (!previous[apiField]) return previous;
+      const next = { ...previous };
+      delete next[apiField];
+      return next;
+    });
+  };
+
   const handleParticipation = async () => {
+    const profilePayload: RegistrationProfile = {
+      nickname: state.profile.nickname,
+      faculty: state.profile.faculty,
+      academicYear: state.profile.year as RegistrationProfile["academicYear"],
+      gender: state.profile.gender as RegistrationProfile["gender"],
+    };
+    const profileValidation = validateRegistrationProfile(profilePayload);
+    if (!profileValidation.profile) {
+      const nextErrors: Partial<Record<ProfileField, string>> = {};
+      profileValidation.missing.forEach((field) => {
+        nextErrors[field] = "入力してください。";
+      });
+      profileValidation.invalid.forEach((field) => {
+        nextErrors[field] = field === "nickname" ? "20文字以内で入力してください。" : field === "faculty" ? "40文字以内で入力してください。" : "選択肢から選んでください。";
+      });
+      setProfileErrors(nextErrors);
+      updateState({ notice: "プロフィールの必須項目を入力してください。" });
+      return;
+    }
+    setProfileErrors({});
     if (!state.consent.age || !state.consent.rules) {
       updateState({ notice: "年齢確認と安全ルールへの同意が必要です。" });
       return;
@@ -384,6 +450,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          profile: profileValidation.profile,
           lineRegistered: state.lineRegistration.source === "line_mock",
           lineTestBypass: localTestRegistration,
           schoolEmailTestBypass: localTestRegistration,
@@ -396,7 +463,19 @@ export default function Home() {
         capacity?: unknown;
         remaining?: unknown;
         updatedAt?: string;
+        fields?: unknown;
       } | null;
+      if ((payload?.error === "PROFILE_REQUIRED" || payload?.error === "PROFILE_INVALID") && Array.isArray(payload.fields)) {
+        const serverErrors: Partial<Record<ProfileField, string>> = {};
+        payload.fields.forEach((field) => {
+          if (typeof field === "string" && field in profileFieldLabels) {
+            serverErrors[field as ProfileField] = "入力内容を確認してください。";
+          }
+        });
+        setProfileErrors(serverErrors);
+        updateState({ notice: "プロフィールの入力内容を確認してください。" });
+        return;
+      }
       if (response.status === 409 && payload?.error === "EVENT_FULL") {
         setWaitingCount((previous) => ({
           ...previous,
@@ -707,10 +786,76 @@ export default function Home() {
             <p className="eyebrow">01 / 次回土曜の準備</p>
             <h2>次回土曜に、<br /><em>事前登録しておく。</em></h2>
             <p className="section-lede">登録はいつでもできます。参加枠を確保しておけば、土曜になったときにマッチングを開始できます。</p>
-            <div className="detail-card profile-preview">
-              <div className="avatar avatar--you">YU</div>
-              <div><span className="label">あなたのプロフィール</span><strong>{state.profile.displayName} / {state.profile.year}</strong><p>{state.profile.purpose}</p></div>
-              <span className="verified-badge">青学生 ✓</span>
+            <div className="profile-form" aria-labelledby="profile-form-title">
+              <div className="profile-form__header">
+                <div><span className="label">事前登録に必要な情報</span><strong id="profile-form-title">プロフィールを入力してください</strong></div>
+                <span className="required-note">すべて必須</span>
+              </div>
+              <div className="profile-field">
+                <label htmlFor="profile-nickname"><span>ニックネーム</span><span className="required-mark">必須</span></label>
+                <input
+                  id="profile-nickname"
+                  type="text"
+                  autoComplete="nickname"
+                  maxLength={20}
+                  value={state.profile.nickname}
+                  required
+                  aria-required="true"
+                  aria-invalid={Boolean(profileErrors.nickname)}
+                  aria-describedby={profileErrors.nickname ? "profile-nickname-error" : undefined}
+                  onChange={(event) => updateProfile("nickname", event.target.value)}
+                  placeholder="例：ゆうき"
+                />
+                {profileErrors.nickname && <small id="profile-nickname-error" className="field-error" role="alert">{profileErrors.nickname}</small>}
+              </div>
+              <div className="profile-field">
+                <label htmlFor="profile-faculty"><span>学部</span><span className="required-mark">必須</span></label>
+                <input
+                  id="profile-faculty"
+                  type="text"
+                  maxLength={40}
+                  value={state.profile.faculty}
+                  required
+                  aria-required="true"
+                  aria-invalid={Boolean(profileErrors.faculty)}
+                  aria-describedby={profileErrors.faculty ? "profile-faculty-error" : undefined}
+                  onChange={(event) => updateProfile("faculty", event.target.value)}
+                  placeholder="例：経済学部"
+                />
+                {profileErrors.faculty && <small id="profile-faculty-error" className="field-error" role="alert">{profileErrors.faculty}</small>}
+              </div>
+              <div className="profile-field">
+                <label htmlFor="profile-year"><span>学年</span><span className="required-mark">必須</span></label>
+                <select
+                  id="profile-year"
+                  value={state.profile.year}
+                  required
+                  aria-required="true"
+                  aria-invalid={Boolean(profileErrors.academicYear)}
+                  aria-describedby={profileErrors.academicYear ? "profile-year-error" : undefined}
+                  onChange={(event) => updateProfile("year", event.target.value)}
+                >
+                  <option value="">選択してください</option>
+                  {PROFILE_YEARS.map((year) => <option key={year} value={year}>{year}</option>)}
+                </select>
+                {profileErrors.academicYear && <small id="profile-year-error" className="field-error" role="alert">{profileErrors.academicYear}</small>}
+              </div>
+              <div className="profile-field">
+                <label htmlFor="profile-gender"><span>性別</span><span className="required-mark">必須</span></label>
+                <select
+                  id="profile-gender"
+                  value={state.profile.gender}
+                  required
+                  aria-required="true"
+                  aria-invalid={Boolean(profileErrors.gender)}
+                  aria-describedby={profileErrors.gender ? "profile-gender-error" : undefined}
+                  onChange={(event) => updateProfile("gender", event.target.value)}
+                >
+                  <option value="">選択してください</option>
+                  {PROFILE_GENDERS.map((gender) => <option key={gender} value={gender}>{profileGenderLabels[gender]}</option>)}
+                </select>
+                {profileErrors.gender && <small id="profile-gender-error" className="field-error" role="alert">{profileErrors.gender}</small>}
+              </div>
             </div>
             {localTest ? (
               <div className="local-test-note" role="status">

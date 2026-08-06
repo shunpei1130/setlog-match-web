@@ -1,6 +1,7 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import type { getDb } from "../db";
 import { eventRegistrations, events } from "../db/schema";
+import type { RegistrationProfile } from "./profile";
 
 type Database = ReturnType<typeof getDb>;
 
@@ -46,10 +47,20 @@ export async function reserveEventRegistration(
   db: Database,
   eventId: string,
   sessionId: string,
+  userId: string,
+  profile: RegistrationProfile,
 ): Promise<RegistrationReservation> {
   const rows = await db.execute(sql`
     SELECT registered, waiting_count AS "waitingCount", capacity
-    FROM register_event_waiting(${eventId}::uuid, ${sessionId}::uuid)
+    FROM register_event_waiting(
+      ${eventId}::uuid,
+      ${sessionId}::uuid,
+      ${userId}::uuid,
+      ${profile.nickname},
+      ${profile.faculty},
+      ${profile.academicYear},
+      ${profile.gender}
+    )
   `);
   const [result] = rows as unknown as Array<{
     registered: boolean;
@@ -70,6 +81,8 @@ export async function recordLocalTestRegistration(
   db: Database,
   eventId: string,
   sessionId: string,
+  userId: string | null,
+  profile: RegistrationProfile,
 ): Promise<RegistrationReservation> {
   const existing = await db.query.eventRegistrations.findFirst({
     where: and(
@@ -78,14 +91,31 @@ export async function recordLocalTestRegistration(
     ),
   });
 
-  if (!existing || existing.lineStatus !== "registered") {
+  if (existing?.lineStatus === "registered") {
+    await db
+      .update(eventRegistrations)
+      .set({
+        userId,
+        nickname: profile.nickname,
+        faculty: profile.faculty,
+        academicYear: profile.academicYear,
+        gender: profile.gender,
+        updatedAt: new Date(),
+      })
+      .where(eq(eventRegistrations.id, existing.id));
+  } else {
     await db
       .insert(eventRegistrations)
       .values({
         eventId,
+        userId,
         sessionId,
         status: "waiting",
         lineStatus: "not_registered",
+        nickname: profile.nickname,
+        faculty: profile.faculty,
+        academicYear: profile.academicYear,
+        gender: profile.gender,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -93,6 +123,11 @@ export async function recordLocalTestRegistration(
         set: {
           status: "waiting",
           lineStatus: "not_registered",
+          userId,
+          nickname: profile.nickname,
+          faculty: profile.faculty,
+          academicYear: profile.academicYear,
+          gender: profile.gender,
           updatedAt: new Date(),
         },
       });

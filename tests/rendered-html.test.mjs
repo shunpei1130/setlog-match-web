@@ -42,7 +42,7 @@ test("requires an Aoyama student email for registration", async () => {
   const response = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ lineRegistered: true }),
+    body: JSON.stringify({ lineRegistered: true, profile: validProfile() }),
   });
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "AOYAMA_EMAIL_REQUIRED" });
@@ -52,14 +52,14 @@ test("requires LINE registration before accepting a valid registration", async (
   const response = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ schoolEmail: "student@aoyama.jp" }),
+    body: JSON.stringify({ schoolEmail: "student@aoyama.jp", profile: validProfile() }),
   });
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "LINE_REGISTRATION_REQUIRED" });
 });
 
 test("accepts the LINE bypass only on localhost", async () => {
-  const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true });
+  const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true, profile: validProfile() });
   const localResponse = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -76,8 +76,39 @@ test("accepts the LINE bypass only on localhost", async () => {
   assert.deepEqual(await productionResponse.json(), { error: "LOCAL_TEST_BYPASS_NOT_ALLOWED" });
 });
 
+test("requires the four profile fields before registration", async () => {
+  const response = await render("/api/events/next-saturday/registrations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ schoolEmail: "student@aoyama.jp", lineRegistered: true }),
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "PROFILE_REQUIRED",
+    fields: ["nickname", "faculty", "academicYear", "gender"],
+  });
+});
+
+test("rejects invalid profile values", async () => {
+  const response = await render("/api/events/next-saturday/registrations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      schoolEmail: "student@aoyama.jp",
+      lineRegistered: true,
+      profile: { ...validProfile(), gender: "unknown" },
+    }),
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "PROFILE_INVALID", fields: ["gender"] });
+});
+
+function validProfile() {
+  return { nickname: "ゆうき", faculty: "経済学部", academicYear: "2年", gender: "male" };
+}
+
 test("keeps the MVP free of starter preview artifacts", async () => {
-  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, localTest, envExample, migration] = await Promise.all([
+  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, localTest, envExample, migration, profileMigration] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -91,10 +122,16 @@ test("keeps the MVP free of starter preview artifacts", async () => {
     readFile(new URL("../lib/local-test.ts", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0001_military_the_stranger.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0003_fixed_zeigeist.sql", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /"use client"/);
   assert.match(page, /localStorage/);
+  assert.match(page, /profile-nickname/);
+  assert.match(page, /profile-faculty/);
+  assert.match(page, /profile-year/);
+  assert.match(page, /profile-gender/);
+  assert.match(page, /PROFILE_REQUIRED/);
   assert.match(page, /SetlogAdapter/);
   assert.match(page, /青学の知らない人の一日/);
   assert.match(page, /次の土曜に事前登録する/);
@@ -110,7 +147,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /scheduleReminder/);
   assert.match(page, /LINE登録を完了する/);
   assert.match(page, /明日はマッチング！/);
-  assert.match(page, /setlog-match-mvp-state-v3/);
+  assert.match(page, /setlog-match-mvp-state-v4/);
   assert.match(page, /line-modal/);
   assert.match(page, /schoolEmail/);
   assert.match(page, /isAoyamaStudentEmail/);
@@ -121,6 +158,8 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(schema, /capacity/);
   assert.match(schema, /waitingCount/);
   assert.match(schema, /eventRegistrations/);
+  assert.match(schema, /academicYear/);
+  assert.match(schema, /gender/);
   assert.match(schema, /event_registrations_event_session_idx/);
   assert.match(db, /DATABASE_URL/);
   assert.match(db, /neon-http/);
@@ -130,8 +169,11 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(registrationRoute, /EVENT_FULL/);
   assert.match(registrationRoute, /lineTestBypass/);
   assert.match(registrationRoute, /schoolEmailTestBypass/);
+  assert.match(registrationRoute, /PROFILE_REQUIRED/);
+  assert.match(registrationRoute, /PROFILE_INVALID/);
   assert.match(registrationRoute, /isLocalTestHostname/);
   assert.match(eventRegistration, /recordLocalTestRegistration/);
+  assert.match(eventRegistration, /RegistrationProfile/);
   assert.match(session, /HttpOnly/);
   assert.match(schoolEmail, /aoyama/);
   assert.match(schoolEmail, /ac/);
@@ -147,6 +189,8 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(migration, /ADD COLUMN "capacity"/);
   assert.match(migration, /ADD COLUMN "waiting_count"/);
   assert.match(migration, /register_event_waiting/);
+  assert.match(profileMigration, /event_registrations_nickname_length/);
+  assert.match(profileMigration, /register_event_waiting/);
   assert.match(layout, /lang="ja"/);
   assert.match(layout, /setlog \/ saturday issue \| 青学生限定/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview|codex-preview/);

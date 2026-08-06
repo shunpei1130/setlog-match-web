@@ -244,6 +244,18 @@ h1 em, h2 em { color: var(--accent); font-style: normal; }
 .avatar--sage { background: #d4e4d1; }
 .avatar--lavender { background: #e4dcef; }
 
+.profile-form { display: grid; gap: 15px; margin-top: 24px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.profile-form__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+.profile-form__header > div { display: grid; gap: 4px; }
+.profile-form__header strong { font-size: 15px; }
+.required-note, .required-mark { color: var(--danger); font-size: 10px; font-weight: 800; white-space: nowrap; }
+.profile-field { display: grid; gap: 7px; }
+.profile-field label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 800; }
+.profile-field input, .profile-field select { width: 100%; min-height: 50px; padding: 0 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; }
+.profile-field input::placeholder { color: #9da8a1; }
+.profile-field input:focus, .profile-field select:focus { border-color: var(--ink); outline: none; }
+.profile-field input[aria-invalid="true"], .profile-field select[aria-invalid="true"] { border-color: var(--danger); }
+
 .school-email-field { display: grid; gap: 7px; margin: 20px 0 14px; }
 .school-email-field label, .check-row strong, .report-box label { font-size: 12px; font-weight: 800; }
 .school-email-field input, .report-box select, .report-box textarea {
@@ -546,6 +558,12 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
 .profile-preview { background: var(--surface-muted); }
 .avatar, .mini-avatar, .pair-avatar { border: 2px solid var(--ink); border-radius: 0; background: var(--surface-muted); }
 .verified-badge { color: var(--ink); font-family: "Arial Narrow", "Arial", sans-serif; font-weight: 900; text-transform: uppercase; }
+.profile-form { border: 2px solid var(--ink); border-radius: 0; background: var(--surface-muted); box-shadow: 4px 4px 0 var(--ink); }
+.profile-form__header { border-bottom: 2px solid var(--ink); }
+.required-note, .required-mark { color: var(--accent-dark); font-family: "Arial Narrow", "Arial", sans-serif; font-weight: 900; }
+.profile-field input, .profile-field select { border: 2px solid var(--ink); border-radius: 0; background: var(--surface); box-shadow: 3px 3px 0 var(--ink); }
+.profile-field input:focus, .profile-field select:focus { border-color: var(--ink); background: var(--surface-muted); box-shadow: 5px 5px 0 var(--ink); }
+.profile-field input[aria-invalid="true"], .profile-field select[aria-invalid="true"] { border-color: var(--danger); box-shadow: 3px 3px 0 var(--danger); }
 .school-email-field input, .report-box select, .report-box textarea { border: 2px solid var(--ink); border-radius: 0; box-shadow: 3px 3px 0 var(--ink); }
 .school-email-field input:focus, .report-box select:focus, .report-box textarea:focus { border-color: var(--ink); background: var(--surface-muted); box-shadow: 5px 5px 0 var(--ink); }
 .check-row { background: var(--surface); }
@@ -706,6 +724,11 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
   .text-button { min-height: 44px; font-size: 13px; }
   .hero-copy::after, .event-card::before { display: none; }
   .event-card { min-height: 270px; padding: 18px; }
+  .profile-form { gap: 14px; margin-top: 20px; padding: 15px; }
+  .profile-form__header { align-items: flex-start; }
+  .profile-form__header strong { font-size: 14px; }
+  .profile-field input, .profile-field select { min-height: 54px; font-size: 16px; }
+  .profile-field label { font-size: 13px; }
   .date-lockup strong { font-size: clamp(78px, 25vw, 116px); }
   .event-card__count .label, .waiting-card__count .label { font-size: 11px; }
   .event-card__count strong, .waiting-card__count strong { font-size: 24px; }
