@@ -38,24 +38,30 @@ test("does not report zero when the waiting-count database is unavailable", asyn
   assert.deepEqual(await response.json(), { error: "WAITING_COUNT_UNAVAILABLE" });
 });
 
-test("requires an Aoyama student email for registration", async () => {
+test("requires an authenticated Aoyama account for registration", async () => {
   const response = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ lineRegistered: true, profile: validProfile() }),
+    body: JSON.stringify({
+      lineRegistered: true,
+      schoolEmail: "student@aoyama.jp",
+      ageConfirmed: true,
+      rulesAccepted: true,
+      profile: validProfile(),
+    }),
+  });
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "AUTH_REQUIRED" });
+});
+
+test("rejects non-Aoyama email before sending an auth code", async () => {
+  const response = await render("/api/auth/request-code", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "student@example.com" }),
   });
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "AOYAMA_EMAIL_REQUIRED" });
-});
-
-test("requires LINE registration before accepting a valid registration", async () => {
-  const response = await render("/api/events/next-saturday/registrations", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ schoolEmail: "student@aoyama.jp", profile: validProfile() }),
-  });
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), { error: "LINE_REGISTRATION_REQUIRED" });
 });
 
 test("accepts the LINE bypass only on localhost", async () => {
@@ -108,7 +114,7 @@ function validProfile() {
 }
 
 test("keeps the MVP free of starter preview artifacts", async () => {
-  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, localTest, envExample, migration, profileMigration] = await Promise.all([
+  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, localTest, envExample, migration, profileMigration, fullMigration, authRoute, lineRoute, pairRoute, adminPage, cronRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -123,6 +129,12 @@ test("keeps the MVP free of starter preview artifacts", async () => {
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0001_military_the_stranger.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0003_fixed_zeigeist.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0004_open_ultimatum.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/verify-code/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/line/webhook/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/pairs/[pairId]/decision/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/cron/line-reminder/route.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /"use client"/);
@@ -131,6 +143,9 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /profile-faculty/);
   assert.match(page, /profile-year/);
   assert.match(page, /profile-gender/);
+  assert.match(page, /profile-instagram/);
+  assert.match(page, /profile-line-contact/);
+  assert.match(page, /auth-code/);
   assert.match(page, /PROFILE_REQUIRED/);
   assert.match(page, /SetlogAdapter/);
   assert.match(page, /青学の知らない人の一日/);
@@ -171,6 +186,9 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(registrationRoute, /schoolEmailTestBypass/);
   assert.match(registrationRoute, /PROFILE_REQUIRED/);
   assert.match(registrationRoute, /PROFILE_INVALID/);
+  assert.match(registrationRoute, /AUTH_REQUIRED/);
+  assert.match(registrationRoute, /AGE_CONFIRMATION_REQUIRED/);
+  assert.match(registrationRoute, /CONTACT_INVALID/);
   assert.match(registrationRoute, /isLocalTestHostname/);
   assert.match(eventRegistration, /recordLocalTestRegistration/);
   assert.match(eventRegistration, /RegistrationProfile/);
@@ -191,6 +209,21 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(migration, /register_event_waiting/);
   assert.match(profileMigration, /event_registrations_nickname_length/);
   assert.match(profileMigration, /register_event_waiting/);
+  assert.match(fullMigration, /CREATE TABLE "users"/);
+  assert.match(fullMigration, /CREATE TABLE "event_pairs"/);
+  assert.match(fullMigration, /CREATE TABLE "pair_decisions"/);
+  assert.match(fullMigration, /CREATE TABLE "line_reminder_deliveries"/);
+  assert.match(fullMigration, /register_event_waiting/);
+  assert.match(authRoute, /AUTH_CODE_MAX_ATTEMPTS/);
+  assert.match(authRoute, /setAuthCookie/);
+  assert.match(lineRoute, /x-line-signature/);
+  assert.match(pairRoute, /INSTAGRAM_CONTACT_REQUIRED/);
+  assert.match(adminPage, /ADMIN_EMAILS|isAdminEmail/);
+  assert.match(cronRoute, /onConflictDoNothing/);
+  assert.match(cronRoute, /returning/);
+  assert.match(envExample, /RESEND_API_KEY=/);
+  assert.match(envExample, /LINE_CHANNEL_SECRET=/);
+  assert.match(envExample, /CRON_SECRET=/);
   assert.match(layout, /lang="ja"/);
   assert.match(layout, /setlog \/ saturday issue \| 青学生限定/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview|codex-preview/);

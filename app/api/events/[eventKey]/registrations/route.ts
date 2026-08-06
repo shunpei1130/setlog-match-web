@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { eventRegistrations, users } from "../../../../../db/schema";
 import { getCurrentAuthUser } from "../../../../../lib/auth";
@@ -7,7 +7,6 @@ import { ensureEvent, recordLocalTestRegistration, reserveEventRegistration } fr
 import { isLocalTestHostname } from "../../../../../lib/local-test";
 import { validateContactHandles, validateRegistrationProfile } from "../../../../../lib/profile";
 import { getOrCreateSessionId, setSessionCookie } from "../../../../../lib/session";
-import { normalizeAoyamaEmail } from "../../../../../lib/school-email";
 
 export const runtime = "nodejs";
 
@@ -35,10 +34,6 @@ export async function POST(
   if (requestedLocalBypass && !isLocalTestRequest) {
     return NextResponse.json({ error: "LOCAL_TEST_BYPASS_NOT_ALLOWED" }, { status: 400 });
   }
-
-  const localTestBypass = isLocalTestRequest
-    && body?.lineTestBypass === true
-    && body?.schoolEmailTestBypass === true;
 
   const profileValidation = validateRegistrationProfile(body?.profile);
   if (profileValidation.missing.length > 0) {
@@ -76,7 +71,10 @@ export async function POST(
   try {
     const db = getDb();
     const event = await ensureEvent(db, eventKey);
-    const { sessionId, shouldSetCookie } = await getOrCreateSessionId();
+    const session = currentUser
+      ? { sessionId: currentUser.sessionId, shouldSetCookie: false }
+      : await getOrCreateSessionId();
+    const { sessionId, shouldSetCookie } = session;
     const userId = currentUser?.id ?? null;
     if (currentUser) {
       await db.update(users).set({
@@ -89,18 +87,19 @@ export async function POST(
       ? await recordLocalTestRegistration(db, event.id, sessionId, userId, profileValidation.profile)
       : await reserveEventRegistration(db, event.id, sessionId, currentUser!.id, profileValidation.profile);
     if (currentUser) {
-      await db.update(eventRegistrations).set({
+      const registration = await db.query.eventRegistrations.findFirst({
+        where: (eventRegistration, operators) => and(
+          operators.eq(eventRegistration.eventId, event.id),
+          operators.eq(eventRegistration.userId, currentUser.id),
+        ),
+      });
+      if (registration) await db.update(eventRegistrations).set({
         userId: currentUser.id,
         lineStatus: "registered",
         ageConfirmedAt: new Date(),
         rulesAcceptedAt: new Date(),
         updatedAt: new Date(),
-      }).where(eq(eventRegistrations.id, (await db.query.eventRegistrations.findFirst({
-        where: (registration, { and, eq }) => and(
-          eq(registration.eventId, event.id),
-          eq(registration.sessionId, sessionId),
-        ),
-      }))?.id ?? "00000000-0000-0000-0000-000000000000"));
+      }).where(eq(eventRegistrations.id, registration.id));
     }
     const now = new Date();
     const response = NextResponse.json({

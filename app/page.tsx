@@ -5,8 +5,10 @@ import { isLocalTestBrowser } from "../lib/local-test";
 import {
   PROFILE_GENDERS,
   PROFILE_YEARS,
+  type ContactField,
   type ProfileField,
   type RegistrationProfile,
+  validateContactHandles,
   validateRegistrationProfile,
 } from "../lib/profile";
 import { isAoyamaStudentEmail, normalizeAoyamaEmail } from "../lib/school-email";
@@ -27,7 +29,7 @@ type DecisionOption = "instagram" | "line" | "continue" | "none";
 type PairStatus = "active" | "ended" | "blocked";
 type SetlogStatus = "idle" | "connecting" | "connected" | "error";
 type LineRegistrationStatus = "not_started" | "registered";
-type LineRegistrationSource = "none" | "line_mock" | "local_test";
+type LineRegistrationSource = "none" | "line_mock" | "line_live" | "local_test";
 type WaitingCountState = {
   status: "loading" | "ready" | "error";
   count: number | null;
@@ -41,6 +43,8 @@ type UserProfile = {
   faculty: string;
   year: string;
   gender: string;
+  instagramHandle: string;
+  lineContact: string;
   campus: string;
   purpose: string;
   interests: string[];
@@ -64,17 +68,39 @@ type Candidate = {
   weekend: string;
   color: string;
   partnerWants: DecisionOption[];
+  faculty?: string;
+  gender?: string;
 };
 
 type DayPair = {
   candidateId: string;
+  pairId?: string;
   status: PairStatus;
   endedReason?: "decision" | "blocked" | "reported";
 };
 
 type ResultState = {
-  kind: "disclosed" | "continued" | "ended";
+  kind: "pending" | "disclosed" | "continued" | "ended";
   items: DecisionOption[];
+  contacts?: { instagram?: string; line?: string } | null;
+};
+
+type RemotePair = {
+  id: string;
+  eventKey: string;
+  status: "draft" | "published" | "closed" | "blocked";
+  setlogUrl: string | null;
+  setlogCode: string | null;
+  candidate: {
+    id: string;
+    nickname: string;
+    faculty: string;
+    academicYear: string;
+    gender: string;
+  };
+  decision: (PrivateDecision & { answered: boolean }) | null;
+  partnerAnswered: boolean;
+  result: ResultState | null;
 };
 
 type StoredState = {
@@ -168,6 +194,8 @@ const initialProfile: UserProfile = {
   faculty: "",
   year: "",
   gender: "",
+  instagramHandle: "",
+  lineContact: "",
   campus: "",
   purpose: "まずは一日の過ごし方を知りたい",
   interests: ["カフェ", "音楽", "散歩"],
@@ -254,6 +282,11 @@ function resolveResult(decision: PrivateDecision, candidate: Candidate): ResultS
   return { kind: "disclosed", items };
 }
 
+function disclosedContact(result: ResultState, item: DecisionOption) {
+  if (item !== "instagram" && item !== "line") return undefined;
+  return result.contacts?.[item];
+}
+
 export default function Home() {
   const [state, setState] = useState<StoredState>(createInitialState);
   const [hydrated, setHydrated] = useState(false);
@@ -266,6 +299,7 @@ export default function Home() {
   const [lineConnecting, setLineConnecting] = useState(false);
   const [participationSubmitting, setParticipationSubmitting] = useState(false);
   const [profileErrors, setProfileErrors] = useState<Partial<Record<ProfileField, string>>>({});
+  const [contactErrors, setContactErrors] = useState<Partial<Record<ContactField, string>>>({});
   const [waitingCount, setWaitingCount] = useState<WaitingCountState>({
     status: "loading",
     count: null,
@@ -273,6 +307,14 @@ export default function Home() {
     remaining: null,
   });
   const [schoolEmail, setSchoolEmail] = useState("");
+  const [authCode, setAuthCode] = useState("");
+  const [authCodeSent, setAuthCodeSent] = useState(false);
+  const [authSending, setAuthSending] = useState(false);
+  const [authVerifying, setAuthVerifying] = useState(false);
+  const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(null);
+  const [lineOfficialAccountUrl, setLineOfficialAccountUrl] = useState<string | null>(null);
+  const [remotePair, setRemotePair] = useState<RemotePair | null>(null);
+  const [pairLoading, setPairLoading] = useState(false);
   const localTest = hydrated && isLocalTestBrowser();
 
   useEffect(() => {
@@ -310,6 +352,47 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
+
+  useEffect(() => {
+    if (!hydrated || localTest) return;
+    let cancelled = false;
+    const loadAccount = async () => {
+      try {
+        const [meResponse, lineResponse] = await Promise.all([
+          fetch("/api/me", { cache: "no-store" }),
+          fetch("/api/line/status", { cache: "no-store" }),
+        ]);
+        if (meResponse.ok) {
+          const me = await meResponse.json() as { user?: { email?: string } };
+          if (!cancelled && typeof me.user?.email === "string") {
+            setAuthenticatedEmail(me.user.email);
+            setSchoolEmail(me.user.email);
+          }
+        }
+        if (lineResponse.ok) {
+          const line = await lineResponse.json() as { linked?: boolean; followed?: boolean; officialAccountUrl?: unknown };
+          if (!cancelled && typeof line.officialAccountUrl === "string") setLineOfficialAccountUrl(line.officialAccountUrl);
+          if (!cancelled && line.linked && line.followed) {
+            setState((previous) => ({
+              ...previous,
+              lineRegistration: { status: "registered", source: "line_live", reminderScheduled: true },
+            }));
+          }
+        }
+      } catch {
+        // The public landing page remains usable when account services are unavailable.
+      }
+      const lineResult = new URLSearchParams(window.location.search).get("line");
+      if (!cancelled && lineResult === "linked-not-following") {
+        setState((previous) => ({ ...previous, notice: "LINEを友だち追加してから、もう一度状態を確認してください。" }));
+      } else if (!cancelled && lineResult === "linked") {
+        setState((previous) => ({ ...previous, notice: "LINE連携が完了しました。参加登録を続けられます。" }));
+      }
+    };
+    void loadAccount();
+    return () => { cancelled = true; };
+    // Account state is intentionally loaded after hydration.
+  }, [hydrated, localTest]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -365,9 +448,57 @@ export default function Home() {
     };
   }, [state.eventKey]);
 
+  useEffect(() => {
+    const pairId = state.pair?.pairId;
+    if (!hydrated || localTest || !pairId || state.phase === "landing" || state.phase === "participation" || state.phase === "waiting") {
+      return;
+    }
+    let cancelled = false;
+
+    const loadPublishedPair = async () => {
+      try {
+        const response = await fetch(`/api/pairs/${encodeURIComponent(pairId)}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json() as { pair?: RemotePair };
+        const pair = payload.pair;
+        if (cancelled || !pair) return;
+        setRemotePair(pair);
+        setState((previous) => ({
+          ...previous,
+          pair: previous.pair
+            ? { ...previous.pair, pairId: pair.id, candidateId: pair.candidate.id }
+            : { pairId: pair.id, candidateId: pair.candidate.id, status: "active" },
+          result: pair.result ?? previous.result,
+        }));
+      } catch {
+        // Keep the locally persisted screen available while the pair endpoint is unavailable.
+      }
+    };
+
+    void loadPublishedPair();
+    return () => { cancelled = true; };
+  }, [hydrated, localTest, state.pair?.pairId, state.phase]);
+
   const selectedCandidate = useMemo(
-    () => candidates.find((candidate) => candidate.id === state.pair?.candidateId) ?? null,
-    [state.pair],
+    () => {
+      if (remotePair?.candidate && state.pair?.candidateId === remotePair.candidate.id) {
+        return {
+          id: remotePair.candidate.id,
+          displayName: remotePair.candidate.nickname,
+          initials: remotePair.candidate.nickname.slice(0, 2).toUpperCase(),
+          year: remotePair.candidate.academicYear,
+          campus: remotePair.candidate.faculty,
+          interests: [],
+          weekend: "運営から届いた、今日の一日です。",
+          color: "sage",
+          partnerWants: [],
+          faculty: remotePair.candidate.faculty,
+          gender: remotePair.candidate.gender,
+        } satisfies Candidate;
+      }
+      return candidates.find((candidate) => candidate.id === state.pair?.candidateId) ?? null;
+    },
+    [remotePair, state.pair],
   );
   const currentStep = phaseStep[state.phase];
   const rankedCandidates = Object.entries(state.rankByCandidate).sort(([, a], [, b]) => a - b);
@@ -391,7 +522,11 @@ export default function Home() {
     setLineModalOpen(false);
     setLineConnecting(false);
     setProfileErrors({});
+    setContactErrors({});
+    setRemotePair(null);
     setSchoolEmail("");
+    setAuthCode("");
+    setAuthCodeSent(false);
   };
 
   const updateProfile = (field: "nickname" | "faculty" | "year" | "gender", value: string) => {
@@ -407,6 +542,69 @@ export default function Home() {
       delete next[apiField];
       return next;
     });
+  };
+
+  const updateContact = (field: ContactField, value: string) => {
+    setState((previous) => ({
+      ...previous,
+      profile: { ...previous.profile, [field]: value },
+      notice: null,
+    }));
+    setContactErrors((previous) => {
+      if (!previous[field]) return previous;
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const requestAuthCode = async () => {
+    const email = normalizeAoyamaEmail(schoolEmail);
+    if (!email) {
+      updateState({ notice: "青学のメールアドレスを入力してください。" });
+      return;
+    }
+    setAuthSending(true);
+    try {
+      const response = await fetch("/api/auth/request-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "AUTH_CODE_UNAVAILABLE");
+      setSchoolEmail(email);
+      setAuthCodeSent(true);
+      updateState({ notice: "認証コードをメールに送りました。10分以内に入力してください。" });
+    } catch {
+      updateState({ notice: "認証コードを送信できませんでした。設定を確認して、もう一度お試しください。" });
+    } finally {
+      setAuthSending(false);
+    }
+  };
+
+  const verifyAuthCode = async () => {
+    const email = normalizeAoyamaEmail(schoolEmail);
+    if (!email || !/^\d{6}$/.test(authCode.trim())) {
+      updateState({ notice: "メールアドレスと6桁の認証コードを入力してください。" });
+      return;
+    }
+    setAuthVerifying(true);
+    try {
+      const response = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: authCode.trim() }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string; user?: { email?: string; lineFollowed?: boolean } } | null;
+      if (!response.ok || typeof payload?.user?.email !== "string") throw new Error(payload?.error ?? "AUTH_VERIFICATION_UNAVAILABLE");
+      setAuthenticatedEmail(payload.user.email);
+      updateState({ notice: "メール認証が完了しました。LINE連携を確認して参加登録を続けてください。" });
+    } catch {
+      updateState({ notice: "認証コードを確認できませんでした。コードを確認して、もう一度お試しください。" });
+    } finally {
+      setAuthVerifying(false);
+    }
   };
 
   const handleParticipation = async () => {
@@ -430,8 +628,26 @@ export default function Home() {
       return;
     }
     setProfileErrors({});
+    const contactValidation = validateContactHandles({
+      instagramHandle: state.profile.instagramHandle,
+      lineContact: state.profile.lineContact,
+    });
+    if (contactValidation.invalid.length > 0) {
+      const nextErrors: Partial<Record<ContactField, string>> = {};
+      contactValidation.invalid.forEach((field) => {
+        nextErrors[field] = field === "instagramHandle" ? "Instagramのユーザーネームを確認してください。" : "120文字以内で入力してください。";
+      });
+      setContactErrors(nextErrors);
+      updateState({ notice: "連絡先の入力内容を確認してください。" });
+      return;
+    }
+    setContactErrors({});
     if (!state.consent.age || !state.consent.rules) {
       updateState({ notice: "年齢確認と安全ルールへの同意が必要です。" });
+      return;
+    }
+    if (!localTest && !authenticatedEmail) {
+      updateState({ notice: "先に青学メールの認証を完了してください。" });
       return;
     }
     const normalizedSchoolEmail = normalizeAoyamaEmail(schoolEmail);
@@ -451,7 +667,10 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile: profileValidation.profile,
-          lineRegistered: state.lineRegistration.source === "line_mock",
+          contacts: contactValidation.contacts,
+          ageConfirmed: state.consent.age,
+          rulesAccepted: state.consent.rules,
+          lineRegistered: state.lineRegistration.source === "line_mock" || state.lineRegistration.source === "line_live",
           lineTestBypass: localTestRegistration,
           schoolEmailTestBypass: localTestRegistration,
           ...(normalizedSchoolEmail ? { schoolEmail: normalizedSchoolEmail } : {}),
@@ -524,6 +743,10 @@ export default function Home() {
   const eventIsFull = waitingCount.status === "ready" && waitingCount.remaining === 0;
 
   const completeLineRegistration = async () => {
+    if (!localTest) {
+      window.location.assign("/api/line/login");
+      return;
+    }
     setLineConnecting(true);
     try {
       await mockLineAdapter.startRegistration();
@@ -541,13 +764,45 @@ export default function Home() {
   };
 
   const startLineRegistration = () => {
+    if (!localTest && !authenticatedEmail) {
+      updateState({ notice: "LINE連携の前に、青学メールを認証してください。" });
+      return;
+    }
     updateState({ notice: null });
     setLineModalOpen(true);
   };
 
-  const startMatching = () => {
+  const startMatching = async () => {
     if (!state.participation) {
       updateState({ phase: "participation", notice: "先に次回土曜への事前登録を完了してください。" });
+      return;
+    }
+    if (!localTest) {
+      setPairLoading(true);
+      try {
+        const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/pair`, { cache: "no-store" });
+        if (response.status === 404) {
+          updateState({ notice: "運営がペアを公開するまで、もう少しお待ちください。" });
+          return;
+        }
+        if (!response.ok) throw new Error("Pair unavailable");
+        const payload = await response.json() as { pair?: RemotePair };
+        if (!payload.pair) throw new Error("Pair missing");
+        setRemotePair(payload.pair);
+        updateState({
+          matchingStarted: true,
+          phase: "dayPair",
+          pair: { pairId: payload.pair.id, candidateId: payload.pair.candidate.id, status: "active" },
+          setlogStatus: "idle",
+          decision: createInitialState().decision,
+          result: payload.pair.result,
+          notice: null,
+        });
+      } catch {
+        updateState({ notice: "ペア情報を取得できませんでした。時間を置いてもう一度お試しください。" });
+      } finally {
+        setPairLoading(false);
+      }
       return;
     }
     updateState({ matchingStarted: true, phase: "recommendation", notice: null });
@@ -588,6 +843,11 @@ export default function Home() {
     if (!selectedCandidate) return;
     updateState({ setlogStatus: "connecting", notice: null });
     try {
+      if (remotePair) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        updateState({ setlogStatus: "connected", notice: null });
+        return;
+      }
       const connection = await mockSetlogAdapter.createConnection(selectedCandidate.id);
       updateState({ setlogStatus: connection.status, notice: null });
     } catch {
@@ -625,11 +885,41 @@ export default function Home() {
     });
   };
 
-  const confirmDecision = () => {
+  const confirmDecision = async () => {
     if (!selectedCandidate) return;
     const { instagram, line, continue: continueChoice, none } = state.decision;
     if (!instagram && !line && !continueChoice && !none) {
       updateState({ notice: "いずれかを選ぶか、「何も教えない」を選択してください。" });
+      return;
+    }
+    if (remotePair) {
+      try {
+        const response = await fetch(`/api/pairs/${encodeURIComponent(remotePair.id)}/decision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instagram,
+            line,
+            continue: continueChoice,
+            none,
+          }),
+        });
+        const payload = await response.json().catch(() => null) as { error?: string; result?: ResultState; pair?: RemotePair } | null;
+        if (!response.ok || !payload?.pair) {
+          updateState({ notice: payload?.error === "INSTAGRAM_CONTACT_REQUIRED" ? "Instagramの連絡先を事前登録してください。" : payload?.error === "LINE_CONTACT_REQUIRED" ? "LINEの連絡先を事前登録してください。" : "回答を保存できませんでした。もう一度お試しください。" });
+          return;
+        }
+        setRemotePair(payload.pair);
+        updateState({
+          decision: { ...state.decision, answered: true },
+          result: payload.result ?? null,
+          phase: payload.result?.kind === "pending" ? "decision" : "result",
+          pair: payload.result?.kind === "pending" ? state.pair : state.pair ? { ...state.pair, status: "ended", endedReason: "decision" } : null,
+          notice: payload.result?.kind === "pending" ? "回答を受け付けました。相手の回答を待っています。" : null,
+        });
+      } catch {
+        updateState({ notice: "回答を保存できませんでした。もう一度お試しください。" });
+      }
       return;
     }
     const decision = { ...state.decision, answered: true };
@@ -643,8 +933,20 @@ export default function Home() {
     });
   };
 
-  const endForSafety = (reason: "blocked" | "reported") => {
-    if (state.pair) void mockSetlogAdapter.endConnection(state.pair.candidateId);
+  const endForSafety = async (reason: "blocked" | "reported") => {
+    if (remotePair) {
+      try {
+        await fetch(`/api/pairs/${encodeURIComponent(remotePair.id)}/${reason === "blocked" ? "block" : "report"}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: reason === "reported" ? JSON.stringify({ reason: reportReason, detail: reportDetail }) : undefined,
+        });
+      } catch {
+        // The local state still closes the view if the safety endpoint is unavailable.
+      }
+    } else if (state.pair) {
+      void mockSetlogAdapter.endConnection(state.pair.candidateId);
+    }
     updateState({
       phase: "ended",
       pair: state.pair ? { ...state.pair, status: reason === "blocked" ? "blocked" : "ended", endedReason: reason } : null,
@@ -655,12 +957,12 @@ export default function Home() {
     setSafetyError("");
   };
 
-  const submitReport = () => {
+  const submitReport = async () => {
     if (!reportReason) {
       setSafetyError("通報理由を選択してください。");
       return;
     }
-    endForSafety("reported");
+    await endForSafety("reported");
   };
 
   if (!hydrated) {
@@ -789,7 +1091,7 @@ export default function Home() {
             <div className="profile-form" aria-labelledby="profile-form-title">
               <div className="profile-form__header">
                 <div><span className="label">事前登録に必要な情報</span><strong id="profile-form-title">プロフィールを入力してください</strong></div>
-                <span className="required-note">すべて必須</span>
+                <span className="required-note">基本情報は必須</span>
               </div>
               <div className="profile-field">
                 <label htmlFor="profile-nickname"><span>ニックネーム</span><span className="required-mark">必須</span></label>
@@ -856,6 +1158,38 @@ export default function Home() {
                 </select>
                 {profileErrors.gender && <small id="profile-gender-error" className="field-error" role="alert">{profileErrors.gender}</small>}
               </div>
+              <div className="profile-field">
+                <label htmlFor="profile-instagram"><span>Instagramユーザーネーム</span><span className="optional-note">任意</span></label>
+                <input
+                  id="profile-instagram"
+                  type="text"
+                  autoComplete="off"
+                  maxLength={40}
+                  value={state.profile.instagramHandle}
+                  aria-invalid={Boolean(contactErrors.instagramHandle)}
+                  aria-describedby={contactErrors.instagramHandle ? "profile-instagram-error" : "profile-instagram-help"}
+                  onChange={(event) => updateContact("instagramHandle", event.target.value)}
+                  placeholder="例：setlog_user"
+                />
+                <small id="profile-instagram-help">相互に選んだときだけ相手に表示します。</small>
+                {contactErrors.instagramHandle && <small id="profile-instagram-error" className="field-error" role="alert">{contactErrors.instagramHandle}</small>}
+              </div>
+              <div className="profile-field">
+                <label htmlFor="profile-line-contact"><span>LINE交換用ID／リンク</span><span className="optional-note">任意</span></label>
+                <input
+                  id="profile-line-contact"
+                  type="text"
+                  autoComplete="off"
+                  maxLength={120}
+                  value={state.profile.lineContact}
+                  aria-invalid={Boolean(contactErrors.lineContact)}
+                  aria-describedby={contactErrors.lineContact ? "profile-line-contact-error" : "profile-line-contact-help"}
+                  onChange={(event) => updateContact("lineContact", event.target.value)}
+                  placeholder="例：https://line.me/ti/p/…"
+                />
+                <small id="profile-line-contact-help">相互に選んだときだけ相手に表示します。</small>
+                {contactErrors.lineContact && <small id="profile-line-contact-error" className="field-error" role="alert">{contactErrors.lineContact}</small>}
+              </div>
             </div>
             {localTest ? (
               <div className="local-test-note" role="status">
@@ -879,7 +1213,10 @@ export default function Home() {
                   placeholder="yourname@aoyama.jp"
                   aria-describedby="school-email-help"
                 />
-                <small id="school-email-help">@aoyama.jp または @aoyama.ac.jp のメールアドレスが必要です。入力内容はDBへ保存しません。</small>
+                <small id="school-email-help">@aoyama.jp または @aoyama.ac.jp のメールアドレスに、6桁の認証コードを送ります。</small>
+                {!authenticatedEmail && <button className="secondary-button" type="button" onClick={requestAuthCode} disabled={authSending}>{authSending ? "送信中…" : "認証コードを送る"}</button>}
+                {authCodeSent && !authenticatedEmail && <div className="auth-code-row"><label htmlFor="auth-code">認証コード</label><div><input id="auth-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={authCode} onChange={(event) => setAuthCode(event.target.value.replace(/\D/g, ""))} placeholder="000000" /><button className="primary-button" type="button" onClick={verifyAuthCode} disabled={authVerifying}>{authVerifying ? "確認中…" : "認証する"}</button></div></div>}
+                {authenticatedEmail && <small className="auth-success" role="status">メール認証済み：{authenticatedEmail}</small>}
               </div>
             )}
             <div className="check-list">
@@ -898,13 +1235,13 @@ export default function Home() {
               <div className="line-setup-card__icon">LINE</div>
               <div className="line-setup-card__body">
                 <span className="label">参加に必要です</span>
-                <strong>{state.lineRegistration.status === "registered" ? "LINE登録済み" : "LINEを登録して、金曜の案内を受け取る"}</strong>
-                <p>{state.lineRegistration.status === "registered" ? "金曜21:00に「明日はマッチング！」の案内を送る予定です。" : "金曜21:00に参加アンケートをお送りします。"}</p>
+                <strong>{state.lineRegistration.status === "registered" ? "LINE連携・友だち追加済み" : "LINEを連携して、金曜の案内を受け取る"}</strong>
+                <p>{state.lineRegistration.status === "registered" ? "金曜21:00に「明日はマッチング！」の案内を送る予定です。" : "LINE Loginと友だち追加が参加条件です。"}</p>
               </div>
               {state.lineRegistration.status === "registered" && <span className="line-setup-card__check">✓</span>}
             </div>}
             <button className="primary-button full-width" onClick={localTest || state.lineRegistration.status === "registered" ? handleParticipation : startLineRegistration} disabled={participationSubmitting}>
-              {participationSubmitting ? "事前登録を保存中…" : localTest ? "テスト参加を開始する" : state.lineRegistration.status === "registered" ? "参加登録を完了する" : "LINE登録を始める"} <span>→</span>
+              {participationSubmitting ? "事前登録を保存中…" : localTest ? "テスト参加を開始する" : state.lineRegistration.status === "registered" ? "参加登録を完了する" : "LINE連携を始める"} <span>→</span>
             </button>
           </section>
         )}
@@ -921,8 +1258,8 @@ export default function Home() {
               <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>金曜21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
               <div className="waiting-card__count" aria-live="polite"><span className="label">初回募集 / 100人限定</span><strong>{remainingSlotsText}</strong><p>{waitingCountText}。次回土曜に参加予定の青学生です。</p></div>
             </div>
-            <button className="primary-button full-width" onClick={startMatching}>土曜のマッチングを開始する <span>→</span></button>
-            <p className="waiting-note">デモ版では曜日に関係なく、開始ボタンで土曜の状態を再現できます。</p>
+            <button className="primary-button full-width" onClick={() => void startMatching()} disabled={pairLoading}>{pairLoading ? "ペアを確認中…" : "土曜のマッチングを開始する"} <span>→</span></button>
+            <p className="waiting-note">運営がペアを公開すると、ここから今日の相手を確認できます。</p>
           </section>
         )}
 
@@ -973,7 +1310,7 @@ export default function Home() {
             <p className="eyebrow">05 / Setlogにつなぐ</p>
             <h2>今日は、<em>一日の共有から。</em></h2>
             <p className="section-lede">Setlogでお互いの土曜日を共有します。連絡先交換の話は、夜の判定までしなくて大丈夫です。</p>
-            <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">setlog<span>↗</span></div><span className="status-pill status-pill--light">Day Pairの部屋</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">今日の共有ルーム</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 一日のログ</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>Setlogの準備ができました</strong><p>今日は一日を楽しんでください。22時にここへ戻ってきます。</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>接続できませんでした</strong><p>通信を確認して、もう一度試してください。</p></div> : <div className="setlog-card__action"><p>接続はデモモードで行われます。実際のSetlogは開きません。</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "接続中…" : "Setlogを準備する"}<span>↗</span></button></div>}</div>
+            <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">setlog<span>↗</span></div><span className="status-pill status-pill--light">Day Pairの部屋</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">今日の共有ルーム</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 一日のログ</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>Setlogの準備ができました</strong><p>{remotePair ? "運営が登録したルームを確認できます。" : "今日は一日を楽しんでください。22時にここへ戻ってきます。"}</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>接続できませんでした</strong><p>通信を確認して、もう一度試してください。</p></div> : <div className="setlog-card__action"><p>{remotePair ? "運営が登録したSetlogルームを確認します。" : "接続はデモモードで行われます。"}</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "接続中…" : "Setlogを準備する"}<span>↗</span></button></div>}{remotePair && state.setlogStatus === "connected" && <div className="setlog-access"><span className="label">運営からの参加情報</span><strong>{remotePair.setlogCode}</strong>{remotePair.setlogUrl && <a href={remotePair.setlogUrl} target="_blank" rel="noreferrer">Setlogを開く ↗</a>}</div>}</div>
             {state.setlogStatus === "connected" && <><div className="setlog-next"><div><span className="label">NEXT</span><strong>22時に判定画面が開きます</strong><p>Instagram、LINE、もう一日、何も教えない。答えは相手には見えません。</p></div></div><button className="primary-button full-width" onClick={openDecision}>夜の判定へ進む <span>→</span></button></>}
             {state.setlogStatus === "error" && <button className="primary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
           </section>
@@ -992,7 +1329,8 @@ export default function Home() {
         {state.phase === "result" && selectedCandidate && state.result && (
           <section className="page-section result-section">
             <div className="result-stamp">23:00 / 結果</div>
-            {state.result.kind === "disclosed" && <><p className="eyebrow">07 / 一致したもの</p><h2>一致したものだけ、<br /><em>開きました。</em></h2><p className="section-lede">{selectedCandidate.displayName}さんと、次の連絡先が一致しました。ここからは二人のペースで。</p><div className="disclosed-list">{state.result.items.map((item) => <div className="disclosed-item" key={item}><span className="disclosed-icon">{item === "instagram" ? "◎" : "▣"}</span><strong>{optionLabels[item]}</strong><span className="disclosed-check">双方一致 ✓</span></div>)}</div></>}
+            {state.result.kind === "pending" && <><p className="eyebrow">07 / 回答を受け付けました</p><h2>相手の回答を、<br /><em>待っています。</em></h2><p className="section-lede">相手が回答すると、結果が開きます。相手の選択内容や、片方だけが選んだ事実は表示されません。</p><div className="result-note"><span>…</span><div><strong>この画面を閉じても大丈夫です</strong><p>回答が揃ったら、次に開いたときに結果を確認できます。</p></div></div></>}
+            {state.result.kind === "disclosed" && <><p className="eyebrow">07 / 一致したもの</p><h2>一致したものだけ、<br /><em>開きました。</em></h2><p className="section-lede">{selectedCandidate.displayName}さんと、次の連絡先が一致しました。ここからは二人のペースで。</p><div className="disclosed-list">{state.result.items.map((item) => <div className="disclosed-item" key={item}><span className="disclosed-icon">{item === "instagram" ? "◎" : "▣"}</span><strong>{optionLabels[item]}</strong><span className="disclosed-check">双方一致 ✓</span>{disclosedContact(state.result!, item) && <code>{disclosedContact(state.result!, item)}</code>}</div>)}</div></>}
             {state.result.kind === "continued" && <><p className="eyebrow">07 / もう一日</p><h2>もう一日だけ、<br /><em>続けてみる。</em></h2><p className="section-lede">連絡先を交換する前に、もう一度だけSetlogで一日を共有します。次回開催の案内をお送りします。</p><div className="result-note result-note--sage"><span>↻</span><div><strong>次回のDay Pair候補にしました</strong><p>相手には、あなたの回答内容は表示されません。</p></div></div></>}
             {state.result.kind === "ended" && <><p className="eyebrow">07 / Day Pair完了</p><h2>今回のDay Pairは、<br /><em>ここで終了です。</em></h2><p className="section-lede">ご参加ありがとうございました。相手の選択内容や不成立の理由は、お互いに表示されません。</p><div className="result-note"><span>○</span><div><strong>後腐れなく、今日はここまで</strong><p>独自アプリ上では相手を再推薦しません。</p></div></div></>}
             <div className="result-footer"><button className="primary-button full-width" onClick={resetDemo}>次の土曜を見る <span>→</span></button><span>また参加したくなったら、いつでも戻ってきてください。</span></div>
@@ -1004,7 +1342,7 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="app-footer"><span>setlog match / SATURDAY ISSUE 001</span><span>青学生限定のデモ版。実際の個人情報は扱いません。</span></footer>
+      <footer className="app-footer"><span>setlog match / SATURDAY ISSUE 001</span><span>青学生限定。連絡先は相互同意まで非公開です。</span></footer>
 
       {safetyOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setSafetyOpen(false)}>
@@ -1022,9 +1360,10 @@ export default function Home() {
             <div className="modal-top"><span className="line-modal__mark">LINE</span><button className="close-button" onClick={() => setLineModalOpen(false)} aria-label="LINE登録を閉じる">×</button></div>
             <p className="eyebrow">LINE登録</p>
             <h2 id="line-modal-title">前日の案内を、<br /><em>LINEで受け取る。</em></h2>
-            <p>事前登録にはLINE登録が必要です。金曜21:00に、翌日のマッチングに参加するかを確認するアンケートをお送りします。</p>
+            <p>事前登録にはLINE Loginと友だち追加が必要です。金曜21:00に、翌日のマッチングに参加するかを確認する案内をお送りします。</p>
+            {lineOfficialAccountUrl && <a className="line-modal__official-link" href={lineOfficialAccountUrl} target="_blank" rel="noreferrer">先に公式アカウントを友だち追加する ↗</a>}
             <div className="line-modal__preview"><span>金曜 21:00</span><strong>明日はマッチング！</strong><small>参加する / 今回は見送る</small></div>
-            <button className="primary-button full-width" type="button" onClick={completeLineRegistration} disabled={lineConnecting}>{lineConnecting ? "LINE登録を準備中…" : "LINE登録を完了する"}<span>→</span></button>
+            <button className="primary-button full-width" type="button" onClick={completeLineRegistration} disabled={lineConnecting}>{lineConnecting ? "LINE連携を準備中…" : localTest ? "テストLINE登録を完了する" : "LINE Loginを始める"}<span>→</span></button>
           </section>
         </div>
       )}

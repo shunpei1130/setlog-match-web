@@ -29,6 +29,13 @@
       "when": 1786027459029,
       "tag": "0003_fixed_zeigeist",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786029523627,
+      "tag": "0004_open_ultimatum",
+      "breakpoints": true
     }
   ]
 }
