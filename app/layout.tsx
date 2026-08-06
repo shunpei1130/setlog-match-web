@@ -1,13 +1,21 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "setlog match | 青学生限定の土曜体験",
-  description: "写真で選ぶ前に、その人の普通の土曜日を見る。Setlog連携型マッチングアプリのMVPデモ。",
+  title: "setlog / saturday issue | 青学生限定",
+  description: "毎週土曜にだけ発行される、知らない青学生の一日を読むSetlog MatchのMVPデモ。",
+  applicationName: "setlog match",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f5f4ee",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
