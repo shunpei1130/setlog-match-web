@@ -4,7 +4,7 @@ import { colors } from "@/theme";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-const AOYAMA_EMAIL_PATTERN = /^[^@\s]+@(aoyama\.jp|aoyama\.ac\.jp)$/i;
+const EMAIL_ADDRESS_PATTERN = /^[^@\s]+@[^@\s]+$/i;
 
 export function AuthScreen({
   busy,
@@ -23,8 +23,8 @@ export function AuthScreen({
 
   const requestCode = async () => {
     const normalized = email.trim().toLowerCase();
-    if (!AOYAMA_EMAIL_PATTERN.test(normalized)) {
-      setMessage("@aoyama.jp または @aoyama.ac.jp のメールアドレスを入力してください。");
+    if (!EMAIL_ADDRESS_PATTERN.test(normalized)) {
+      setMessage("メールアドレスを入力してください。");
       return;
     }
     setSending(true);
@@ -37,7 +37,7 @@ export function AuthScreen({
         : "6桁の認証コードを送信しました。");
     } catch (error) {
       setMessage(error instanceof ApiError && error.code === "AOYAMA_EMAIL_REQUIRED"
-        ? "青学のメールアドレスを確認してください。"
+        ? "登録対象のメールアドレスを確認してください。"
         : "認証コードを送信できませんでした。");
     } finally {
       setSending(false);
@@ -52,11 +52,11 @@ export function AuthScreen({
       {message ? <Notice>{message}</Notice> : null}
       <Card>
         <Field
-          label="青学メール"
+          label="登録メールアドレス"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
-          placeholder="student@aoyama.jp"
+          placeholder="name@example.com"
           value={email}
           onChangeText={setEmail}
           editable={!sent}
