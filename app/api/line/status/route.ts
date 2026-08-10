@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getCurrentAuthUser } from "../../../../lib/auth";
+import { getApiAuthUser } from "../../../../lib/auth";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const user = await getCurrentAuthUser();
+export async function GET(request: Request) {
+  const user = await getApiAuthUser(request);
   if (!user) return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
   return NextResponse.json({
     linked: Boolean(user.lineUserId),

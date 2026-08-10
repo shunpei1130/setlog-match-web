@@ -2,13 +2,55 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { eventRegistrations, users } from "../../../../../db/schema";
-import { getCurrentAuthUser } from "../../../../../lib/auth";
-import { ensureEvent, recordLocalTestRegistration, reserveEventRegistration } from "../../../../../lib/event-registration";
+import { getApiAuthUser } from "../../../../../lib/auth";
+import { isAllowedAuthEmail } from "../../../../../lib/auth-email";
+import { ensureEvent, getWaitingCount, recordLocalTestRegistration, reserveEventRegistration } from "../../../../../lib/event-registration";
 import { isLocalTestHostname } from "../../../../../lib/local-test";
 import { validateContactHandles, validateRegistrationProfile } from "../../../../../lib/profile";
 import { getOrCreateSessionId, setSessionCookie } from "../../../../../lib/session";
 
 export const runtime = "nodejs";
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ eventKey: string }> },
+) {
+  const user = await getApiAuthUser(request);
+  if (!user) return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
+  const { eventKey } = await params;
+  try {
+    const db = getDb();
+    const event = await ensureEvent(db, eventKey);
+    const [registration, count] = await Promise.all([
+      db.query.eventRegistrations.findFirst({
+        where: (row, operators) => and(
+          operators.eq(row.eventId, event.id),
+          operators.eq(row.userId, user.id),
+        ),
+      }),
+      getWaitingCount(db, event.id),
+    ]);
+    return NextResponse.json({
+      eventKey,
+      registration: registration ? {
+        status: registration.status,
+        lineStatus: registration.lineStatus,
+        nickname: registration.nickname,
+        faculty: registration.faculty,
+        academicYear: registration.academicYear,
+        gender: registration.gender,
+        ageConfirmed: Boolean(registration.ageConfirmedAt),
+        rulesAccepted: Boolean(registration.rulesAcceptedAt),
+      } : null,
+      count,
+      capacity: event.capacity,
+      remaining: Math.max(0, event.capacity - count),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    return NextResponse.json({ error: "REGISTRATION_UNAVAILABLE" }, { status: 503 });
+  }
+}
 
 export async function POST(
   request: Request,
@@ -55,7 +97,7 @@ export async function POST(
     return NextResponse.json({ error: "RULES_ACCEPTANCE_REQUIRED" }, { status: 400 });
   }
 
-  const currentUser = localTestBypass ? null : await getCurrentAuthUser();
+  const currentUser = localTestBypass ? null : await getApiAuthUser(request);
   if (!localTestBypass && !currentUser) {
     return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
   }
@@ -64,7 +106,7 @@ export async function POST(
     return NextResponse.json({ error: "LINE_REGISTRATION_REQUIRED" }, { status: 400 });
   }
 
-  if (!localTestBypass && !currentUser?.email) {
+  if (!localTestBypass && (!currentUser?.email || !isAllowedAuthEmail(currentUser.email))) {
     return NextResponse.json({ error: "AOYAMA_EMAIL_REQUIRED" }, { status: 400 });
   }
 

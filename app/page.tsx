@@ -11,7 +11,7 @@ import {
   validateContactHandles,
   validateRegistrationProfile,
 } from "../lib/profile";
-import { isAoyamaStudentEmail, normalizeAoyamaEmail } from "../lib/school-email";
+import { normalizeEmailAddress } from "../lib/school-email";
 
 type AppPhase =
   | "landing"
@@ -559,7 +559,7 @@ export default function Home() {
   };
 
   const requestAuthCode = async () => {
-    const email = normalizeAoyamaEmail(schoolEmail);
+    const email = normalizeEmailAddress(schoolEmail);
     if (!email) {
       updateState({ notice: "青学のメールアドレスを入力してください。" });
       return;
@@ -584,7 +584,7 @@ export default function Home() {
   };
 
   const verifyAuthCode = async () => {
-    const email = normalizeAoyamaEmail(schoolEmail);
+    const email = normalizeEmailAddress(schoolEmail);
     if (!email || !/^\d{6}$/.test(authCode.trim())) {
       updateState({ notice: "メールアドレスと6桁の認証コードを入力してください。" });
       return;
@@ -650,8 +650,8 @@ export default function Home() {
       updateState({ notice: "先に青学メールの認証を完了してください。" });
       return;
     }
-    const normalizedSchoolEmail = normalizeAoyamaEmail(schoolEmail);
-    if (!localTest && (!normalizedSchoolEmail || !isAoyamaStudentEmail(normalizedSchoolEmail))) {
+    const normalizedSchoolEmail = normalizeEmailAddress(schoolEmail);
+    if (!localTest && !normalizedSchoolEmail) {
       updateState({ notice: "青学のメールアドレス（@aoyama.jp または @aoyama.ac.jp）を入力してください。" });
       return;
     }
@@ -1198,7 +1198,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="school-email-field">
-                <label htmlFor="school-email">青学のメールアドレス</label>
+                <label htmlFor="school-email">登録メールアドレス</label>
                 <input
                   id="school-email"
                   type="email"
@@ -1210,10 +1210,10 @@ export default function Home() {
                     setSchoolEmail(event.target.value);
                     if (state.notice) updateState({ notice: null });
                   }}
-                  placeholder="yourname@aoyama.jp"
+                  placeholder="name@example.com"
                   aria-describedby="school-email-help"
                 />
-                <small id="school-email-help">@aoyama.jp または @aoyama.ac.jp のメールアドレスに、6桁の認証コードを送ります。</small>
+                <small id="school-email-help">対象のメールアドレスに、6桁の認証コードを送ります。</small>
                 {!authenticatedEmail && <button className="secondary-button" type="button" onClick={requestAuthCode} disabled={authSending}>{authSending ? "送信中…" : "認証コードを送る"}</button>}
                 {authCodeSent && !authenticatedEmail && <div className="auth-code-row"><label htmlFor="auth-code">認証コード</label><div><input id="auth-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={authCode} onChange={(event) => setAuthCode(event.target.value.replace(/\D/g, ""))} placeholder="000000" /><button className="primary-button" type="button" onClick={verifyAuthCode} disabled={authVerifying}>{authVerifying ? "確認中…" : "認証する"}</button></div></div>}
                 {authenticatedEmail && <small className="auth-success" role="status">メール認証済み：{authenticatedEmail}</small>}

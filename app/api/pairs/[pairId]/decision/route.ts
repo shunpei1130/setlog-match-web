@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../../db";
-import { getCurrentAuthUser } from "../../../../../lib/auth";
+import { getApiAuthUser } from "../../../../../lib/auth";
 import { getPairViewForUser, recordDecision, recordDisclosuresForUser, validateDecision } from "../../../../../lib/pair";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ pairId: string }> },
 ) {
-  const user = await getCurrentAuthUser();
+  const user = await getApiAuthUser(request);
   if (!user) return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
   const { pairId } = await params;
   const decision = validateDecision(await request.json().catch(() => null));

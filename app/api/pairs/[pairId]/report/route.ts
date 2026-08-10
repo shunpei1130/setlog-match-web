@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../../db";
 import { eventPairs, safetyReports } from "../../../../../db/schema";
-import { getCurrentAuthUser } from "../../../../../lib/auth";
+import { getApiAuthUser } from "../../../../../lib/auth";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ pairId: string }> },
 ) {
-  const user = await getCurrentAuthUser();
+  const user = await getApiAuthUser(request);
   if (!user) return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
   const body = await request.json().catch(() => null) as { reason?: unknown; detail?: unknown } | null;
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";

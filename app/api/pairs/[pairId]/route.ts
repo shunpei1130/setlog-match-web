@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../db";
-import { getCurrentAuthUser } from "../../../../lib/auth";
+import { getApiAuthUser } from "../../../../lib/auth";
 import { getPairViewForUser } from "../../../../lib/pair";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ pairId: string }> },
 ) {
-  const user = await getCurrentAuthUser();
+  const user = await getApiAuthUser(request);
   if (!user) return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
   const { pairId } = await params;
   try {

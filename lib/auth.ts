@@ -17,6 +17,13 @@ export type AuthUser = {
   sessionId: string;
 };
 
+export function getBearerToken(request: Request) {
+  const authorization = request.headers.get("authorization");
+  if (!authorization) return null;
+  const match = /^Bearer ([A-Za-z0-9_-]+)$/.exec(authorization);
+  return match?.[1] ?? null;
+}
+
 function cookieOptions(maxAge: number) {
   return [
     `Path=/`,
@@ -27,9 +34,7 @@ function cookieOptions(maxAge: number) {
   ].filter(Boolean).join("; ");
 }
 
-export async function getCurrentAuthUser(): Promise<AuthUser | null> {
-  const cookieStore = await cookies();
-  const rawToken = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+async function getAuthUserByToken(rawToken: string | null): Promise<AuthUser | null> {
   if (!rawToken) return null;
 
   try {
@@ -71,6 +76,23 @@ export async function getCurrentAuthUser(): Promise<AuthUser | null> {
   } catch {
     return null;
   }
+}
+
+export async function getCurrentAuthUser(): Promise<AuthUser | null> {
+  const cookieStore = await cookies();
+  return getAuthUserByToken(cookieStore.get(AUTH_COOKIE_NAME)?.value ?? null);
+}
+
+export async function getApiAuthUser(request: Request): Promise<AuthUser | null> {
+  if (request.headers.has("authorization")) {
+    return getAuthUserByToken(getBearerToken(request));
+  }
+  return getCurrentAuthUser();
+}
+
+export async function revokeAuthToken(rawToken: string) {
+  const db = getDb();
+  await db.delete(authSessions).where(eq(authSessions.tokenHash, hashSecret(rawToken)));
 }
 
 export async function createAuthSession(db: ReturnType<typeof getDb>, userId: string) {

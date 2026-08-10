@@ -1,29 +1,62 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../db";
-import { users } from "../../../../db/schema";
+import { lineLoginStates, users } from "../../../../db/schema";
 import { getCurrentAuthUser } from "../../../../lib/auth";
-import { safeSecretEqual } from "../../../../lib/crypto";
+import { hashSecret, safeSecretEqual } from "../../../../lib/crypto";
 import { checkLineFriendship, exchangeLineCode, getLineProfile } from "../../../../lib/line";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
-  const user = await getCurrentAuthUser();
-  if (!user) return NextResponse.redirect(new URL("/?line=auth-required", request.url));
+type CallbackTarget = { kind: "web" | "mobile"; userId: string };
 
+function redirectFor(request: Request, kind: CallbackTarget["kind"], status: string) {
+  if (kind === "mobile") {
+    return NextResponse.redirect(new URL(`setlogmatch://line-callback?status=${encodeURIComponent(status)}`));
+  }
+  return NextResponse.redirect(new URL(`/?line=${encodeURIComponent(status)}`, request.url));
+}
+
+async function resolveCallbackTarget(state: string): Promise<CallbackTarget | null> {
+  if (state.startsWith("m_")) {
+    const now = new Date();
+    const [mobileState] = await getDb()
+      .update(lineLoginStates)
+      .set({ consumedAt: now })
+      .where(and(
+        eq(lineLoginStates.stateHash, hashSecret(state)),
+        gt(lineLoginStates.expiresAt, now),
+        isNull(lineLoginStates.consumedAt),
+      ))
+      .returning({ userId: lineLoginStates.userId });
+    return mobileState ? { kind: "mobile", userId: mobileState.userId } : null;
+  }
+
+  const user = await getCurrentAuthUser();
+  if (!user) return null;
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("setlog_line_state")?.value;
+  if (!expectedState || !safeSecretEqual(expectedState, state)) return null;
+  return { kind: "web", userId: user.id };
+}
+
+export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
-  if (error || !code || !state) return NextResponse.redirect(new URL("/?line=cancelled", request.url));
+  const requestedKind = state?.startsWith("m_") ? "mobile" : "web";
+  if (!state) return redirectFor(request, requestedKind, "invalid-state");
 
-  const cookieStore = await cookies();
-  const expectedState = cookieStore.get("setlog_line_state")?.value;
-  if (!expectedState || !safeSecretEqual(expectedState, state)) {
-    return NextResponse.redirect(new URL("/?line=invalid-state", request.url));
+  let target: CallbackTarget | null = null;
+  try {
+    target = await resolveCallbackTarget(state);
+  } catch {
+    return redirectFor(request, requestedKind, "unavailable");
   }
+  if (!target) return redirectFor(request, requestedKind, requestedKind === "mobile" ? "expired" : "invalid-state");
+  if (error || !code) return redirectFor(request, target.kind, "cancelled");
 
   try {
     const token = await exchangeLineCode(code);
@@ -31,8 +64,8 @@ export async function GET(request: Request) {
     const followed = await checkLineFriendship(profile.userId);
     const db = getDb();
     const existing = await db.query.users.findFirst({ where: eq(users.lineUserId, profile.userId) });
-    if (existing && existing.id !== user.id) {
-      return NextResponse.redirect(new URL("/?line=already-linked", request.url));
+    if (existing && existing.id !== target.userId) {
+      return redirectFor(request, target.kind, "already-linked");
     }
     await db.update(users)
       .set({
@@ -42,11 +75,13 @@ export async function GET(request: Request) {
         lineLinkedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(users.id, user.id));
-    const response = NextResponse.redirect(new URL(`/?line=${followed ? "linked" : "linked-not-following"}`, request.url));
-    response.headers.append("Set-Cookie", "setlog_line_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax;");
+      .where(eq(users.id, target.userId));
+    const response = redirectFor(request, target.kind, followed ? "linked" : "linked-not-following");
+    if (target.kind === "web") {
+      response.headers.append("Set-Cookie", "setlog_line_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax;");
+    }
     return response;
   } catch {
-    return NextResponse.redirect(new URL("/?line=unavailable", request.url));
+    return redirectFor(request, target.kind, "unavailable");
   }
 }

@@ -71,6 +71,23 @@ export const authSessions = pgTable(
   }),
 );
 
+export const lineLoginStates = pgTable(
+  "line_login_states",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stateHash: text("state_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userExpiryIndex: index("line_login_states_user_expiry_idx").on(table.userId, table.expiresAt),
+  }),
+);
+
 export const events = pgTable("events", {
   id: uuid("id").defaultRandom().primaryKey(),
   eventKey: text("event_key").notNull().unique(),
@@ -258,6 +275,7 @@ export const eventsRelations = relations(events, ({ many }) => ({
 
 export const usersRelations = relations(users, ({ many }) => ({
   authSessions: many(authSessions),
+  lineLoginStates: many(lineLoginStates),
   registrations: many(eventRegistrations),
   pairDecisions: many(pairDecisions),
   disclosuresFrom: many(contactDisclosures, { relationName: "disclosureSource" }),
@@ -270,6 +288,10 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const authSessionsRelations = relations(authSessions, ({ one }) => ({
   user: one(users, { fields: [authSessions.userId], references: [users.id] }),
+}));
+
+export const lineLoginStatesRelations = relations(lineLoginStates, ({ one }) => ({
+  user: one(users, { fields: [lineLoginStates.userId], references: [users.id] }),
 }));
 
 export const eventRegistrationsRelations = relations(eventRegistrations, ({ one }) => ({

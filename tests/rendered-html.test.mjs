@@ -64,6 +64,33 @@ test("rejects non-Aoyama email before sending an auth code", async () => {
   assert.deepEqual(await response.json(), { error: "AOYAMA_EMAIL_REQUIRED" });
 });
 
+test("allows only the configured operator email as an auth exception", async () => {
+  const previous = process.env.AUTH_EMAIL_EXCEPTIONS;
+  process.env.AUTH_EMAIL_EXCEPTIONS = "s.hasegawa1130@gmail.com";
+  try {
+    const operatorResponse = await render("/api/auth/request-code", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: " S.HASEGAWA1130@GMAIL.COM " }),
+    });
+    assert.equal(operatorResponse.status, 503);
+    assert.deepEqual(await operatorResponse.json(), { error: "AUTH_CODE_UNAVAILABLE" });
+
+    for (const email of ["s.hasegawa1130@outlook.com", "other@gmail.com"]) {
+      const response = await render("/api/auth/request-code", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), { error: "AOYAMA_EMAIL_REQUIRED" });
+    }
+  } finally {
+    if (previous === undefined) delete process.env.AUTH_EMAIL_EXCEPTIONS;
+    else process.env.AUTH_EMAIL_EXCEPTIONS = previous;
+  }
+});
+
 test("accepts the LINE bypass only on localhost", async () => {
   const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true, profile: validProfile() });
   const localResponse = await render("/api/events/next-saturday/registrations", {
@@ -114,7 +141,7 @@ function validProfile() {
 }
 
 test("keeps the MVP free of starter preview artifacts", async () => {
-  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, localTest, envExample, migration, profileMigration, fullMigration, authRoute, lineRoute, pairRoute, adminPage, cronRoute] = await Promise.all([
+  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, authEmail, localTest, envExample, iosAuthScreen, migration, profileMigration, fullMigration, authRoute, authVerification, lineRoute, pairRoute, adminPage, cronRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -125,12 +152,15 @@ test("keeps the MVP free of starter preview artifacts", async () => {
     readFile(new URL("../app/api/events/[eventKey]/registrations/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/session.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/school-email.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth-email.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/local-test.ts", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../ios/src/components/auth-screen.tsx", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0001_military_the_stranger.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0003_fixed_zeigeist.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0004_open_ultimatum.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/verify-code/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth-verification.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/line/webhook/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/pairs/[pairId]/decision/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8"),
@@ -165,7 +195,8 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /setlog-match-mvp-state-v4/);
   assert.match(page, /line-modal/);
   assert.match(page, /schoolEmail/);
-  assert.match(page, /isAoyamaStudentEmail/);
+  assert.match(page, /normalizeEmailAddress/);
+  assert.doesNotMatch(page, /isAoyamaStudentEmail/);
   assert.match(page, /waitingCount/);
   assert.match(page, /waiting-count/);
   assert.match(page, /registrations/);
@@ -194,6 +225,10 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(eventRegistration, /RegistrationProfile/);
   assert.match(session, /HttpOnly/);
   assert.match(schoolEmail, /aoyama/);
+  assert.match(authEmail, /AUTH_EMAIL_EXCEPTIONS/);
+  assert.match(registrationRoute, /isAllowedAuthEmail/);
+  assert.match(iosAuthScreen, /EMAIL_ADDRESS_PATTERN/);
+  assert.doesNotMatch(iosAuthScreen, /AOYAMA_EMAIL\s*=/);
   assert.match(schoolEmail, /ac/);
   assert.match(localTest, /localhost/);
   assert.match(localTest, /127\.0\.0\.1/);
@@ -214,7 +249,8 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(fullMigration, /CREATE TABLE "pair_decisions"/);
   assert.match(fullMigration, /CREATE TABLE "line_reminder_deliveries"/);
   assert.match(fullMigration, /register_event_waiting/);
-  assert.match(authRoute, /AUTH_CODE_MAX_ATTEMPTS/);
+  assert.match(authRoute, /verifyAuthenticationCode/);
+  assert.match(authVerification, /AUTH_CODE_MAX_ATTEMPTS/);
   assert.match(authRoute, /setAuthCookie/);
   assert.match(lineRoute, /x-line-signature/);
   assert.match(pairRoute, /INSTAGRAM_CONTACT_REQUIRED/);
@@ -222,6 +258,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(cronRoute, /onConflictDoNothing/);
   assert.match(cronRoute, /returning/);
   assert.match(envExample, /RESEND_API_KEY=/);
+  assert.match(envExample, /AUTH_EMAIL_EXCEPTIONS=/);
   assert.match(envExample, /LINE_CHANNEL_SECRET=/);
   assert.match(envExample, /CRON_SECRET=/);
   assert.match(layout, /lang="ja"/);

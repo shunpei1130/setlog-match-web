@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+async function source(path) {
+  return readFile(new URL(path, import.meta.url), "utf8");
+}
+
+test("participant APIs accept Bearer without changing admin authentication", async () => {
+  const [auth, participant, admin, mobileVerify, webVerify, signOut, mobileMe] = await Promise.all([
+    source("../lib/auth.ts"),
+    source("../app/api/events/[eventKey]/pair/route.ts"),
+    source("../app/api/admin/reports/route.ts"),
+    source("../app/api/mobile/auth/verify-code/route.ts"),
+    source("../app/api/auth/verify-code/route.ts"),
+    source("../app/api/mobile/auth/sign-out/route.ts"),
+    source("../app/api/mobile/me/route.ts"),
+  ]);
+
+  assert.match(auth, /\^Bearer \(\[A-Za-z0-9_-\]\+\)\$/);
+  assert.match(auth, /gt\(authSessions\.expiresAt, new Date\(\)\)/);
+  assert.match(auth, /if \(request\.headers\.has\("authorization"\)\)/);
+  assert.match(auth, /return getCurrentAuthUser\(\)/);
+  assert.match(participant, /getApiAuthUser\(request\)/);
+  assert.match(admin, /getCurrentAuthUser\(\)/);
+  assert.doesNotMatch(admin, /getApiAuthUser/);
+  assert.match(mobileVerify, /accessToken: result\.session\.rawToken/);
+  assert.doesNotMatch(mobileVerify, /setAuthCookie/);
+  assert.match(webVerify, /setAuthCookie/);
+  assert.match(signOut, /revokeAuthToken/);
+  assert.match(mobileMe, /instagramHandle/);
+  assert.match(mobileMe, /lineContact/);
+});
+
+test("mobile LINE state is hashed, expiring, and one-time", async () => {
+  const [schema, migration, login, callback] = await Promise.all([
+    source("../db/schema.ts"),
+    source("../drizzle/0005_big_songbird.sql"),
+    source("../app/api/mobile/line/login/route.ts"),
+    source("../app/api/line/callback/route.ts"),
+  ]);
+
+  assert.match(schema, /lineLoginStates/);
+  assert.match(schema, /stateHash/);
+  assert.match(migration, /CREATE TABLE "line_login_states"/);
+  assert.match(login, /10 \* 60 \* 1000/);
+  assert.match(login, /stateHash: hashSecret\(state\)/);
+  assert.match(login, /setlogmatch:\/\/line-callback/);
+  assert.match(callback, /isNull\(lineLoginStates\.consumedAt\)/);
+  assert.match(callback, /gt\(lineLoginStates\.expiresAt, now\)/);
+  assert.match(callback, /consumedAt: now/);
+  assert.match(callback, /linked-not-following/);
+  assert.match(callback, /already-linked/);
+});
+
+test("registration GET restores the participant state", async () => {
+  const registration = await source("../app/api/events/[eventKey]/registrations/route.ts");
+  assert.match(registration, /export async function GET/);
+  assert.match(registration, /registration: registration \?/);
+  assert.match(registration, /ageConfirmed/);
+  assert.match(registration, /rulesAccepted/);
+  assert.match(registration, /remaining: Math\.max/);
+});
+
+test("block and report stay participant-authenticated safety actions", async () => {
+  const [blockRoute, reportRoute] = await Promise.all([
+    source("../app/api/pairs/[pairId]/block/route.ts"),
+    source("../app/api/pairs/[pairId]/report/route.ts"),
+  ]);
+  assert.match(blockRoute, /getApiAuthUser\(request\)/);
+  assert.match(blockRoute, /blockedUserId/);
+  assert.match(reportRoute, /getApiAuthUser\(request\)/);
+  assert.match(reportRoute, /safetyReports/);
+  assert.match(reportRoute, /REPORT_REASON_REQUIRED/);
+});
