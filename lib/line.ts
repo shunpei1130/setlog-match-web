@@ -13,7 +13,8 @@ function getLineConfig() {
     ?? `${process.env.APP_BASE_URL ?? "http://localhost:3001"}/api/line/callback`;
   const accessToken = process.env.LINE_MESSAGING_ACCESS_TOKEN;
   if (!channelId || !channelSecret) throw new Error("LINE Login is not configured.");
-  return { channelId, channelSecret, redirectUri, accessToken };
+  const messagingChannelSecret = process.env.LINE_MESSAGING_CHANNEL_SECRET ?? channelSecret;
+  return { channelId, channelSecret, messagingChannelSecret, redirectUri, accessToken };
 }
 
 export function buildLineLoginUrl(state: string) {
@@ -80,7 +81,7 @@ export async function pushLineMessage(lineUserId: string, text: string) {
 }
 
 export function verifyLineWebhookSignature(body: string, signature: string | null) {
-  const { channelSecret } = getLineConfig();
+  const { messagingChannelSecret } = getLineConfig();
   if (!signature) return false;
-  return safeSecretEqual(signHmac(body, channelSecret), signature);
+  return safeSecretEqual(signHmac(body, messagingChannelSecret), signature);
 }
