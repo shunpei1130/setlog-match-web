@@ -10,6 +10,16 @@ export class EmailConfigurationError extends Error {
   }
 }
 
+export class EmailDeliveryError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly providerMessage: string,
+  ) {
+    super(`Resend request failed with status ${status}: ${providerMessage}`);
+    this.name = "EmailDeliveryError";
+  }
+}
+
 export async function sendVerificationCode({ email, code }: VerificationEmail) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -38,6 +48,10 @@ export async function sendVerificationCode({ email, code }: VerificationEmail) {
   });
 
   if (!response.ok) {
-    throw new Error(`Resend request failed with status ${response.status}.`);
+    const payload = await response.json().catch(() => null) as { message?: unknown } | null;
+    const providerMessage = typeof payload?.message === "string"
+      ? payload.message.slice(0, 300)
+      : "Unknown Resend error";
+    throw new EmailDeliveryError(response.status, providerMessage);
   }
 }

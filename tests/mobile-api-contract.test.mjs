@@ -53,6 +53,19 @@ test("mobile LINE state is hashed, expiring, and one-time", async () => {
   assert.match(callback, /already-linked/);
 });
 
+test("failed verification email does not leave a throttling code behind", async () => {
+  const [route, email] = await Promise.all([
+    source("../app/api/auth/request-code/route.ts"),
+    source("../lib/email.ts"),
+  ]);
+
+  assert.match(route, /returning\(\{ id: authenticationCodes\.id \}\)/);
+  assert.match(route, /delete\(authenticationCodes\).*created\.id/s);
+  assert.match(route, /verification email rejected/);
+  assert.match(email, /class EmailDeliveryError/);
+  assert.match(email, /payload\?\.message/);
+});
+
 test("registration GET restores the participant state", async () => {
   const registration = await source("../app/api/events/[eventKey]/registrations/route.ts");
   assert.match(registration, /export async function GET/);
