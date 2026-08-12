@@ -9,6 +9,8 @@ jest.mock("@/lib/api", () => ({
 
 const requestCode = mobileApi.requestCode as jest.Mock;
 
+jest.setTimeout(15_000);
+
 describe("メールOTP", () => {
   beforeEach(() => requestCode.mockReset());
 

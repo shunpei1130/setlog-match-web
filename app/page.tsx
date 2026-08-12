@@ -744,7 +744,8 @@ export default function Home() {
 
   const completeLineRegistration = async () => {
     if (!localTest) {
-      window.location.assign("/api/line/login");
+      // LINE OAuth needs a full-document navigation so the API redirect can leave this origin.
+      window.location.assign(new URL("/api/line/login", window.location.origin));
       return;
     }
     setLineConnecting(true);
