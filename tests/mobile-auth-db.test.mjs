@@ -13,15 +13,30 @@ if (!testDatabaseUrl || !/^br-[a-z0-9-]+$/i.test(testBranchId ?? "")) {
 const pepper = `db-test-${randomBytes(18).toString("hex")}`;
 const runId = `${Date.now()}-${randomBytes(5).toString("hex")}`;
 const email = `codex-mobile-db-${runId}@example.com`;
+const deliveryEmail = `codex-email-delivery-${runId}@example.com`;
 const sql = neon(testDatabaseUrl);
 
 process.env.DATABASE_URL = testDatabaseUrl;
 process.env.AUTH_SECRET_PEPPER = pepper;
-process.env.AUTH_EMAIL_EXCEPTIONS = email;
+process.env.AUTH_EMAIL_EXCEPTIONS = `${email},${deliveryEmail}`;
 process.env.ADMIN_EMAILS = email;
 process.env.LINE_CHANNEL_ID = "db-test-line-channel";
 process.env.LINE_CHANNEL_SECRET = "db-test-line-secret";
 process.env.LINE_LOGIN_REDIRECT_URI = "http://localhost/api/line/callback";
+process.env.RESEND_API_KEY = "db-test-resend-key";
+process.env.EMAIL_FROM = "Setlog Match <test@example.com>";
+
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (url === "https://api.resend.com/emails") {
+    return new Response(JSON.stringify({ message: "Test delivery rejected" }), {
+      status: 422,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  return originalFetch(input, init);
+};
 
 let workerPromise;
 
@@ -69,8 +84,11 @@ function bearer(token) {
 }
 
 after(async () => {
+  globalThis.fetch = originalFetch;
   await sql`DELETE FROM authentication_codes WHERE email = ${email}`;
+  await sql`DELETE FROM authentication_codes WHERE email = ${deliveryEmail}`;
   await sql`DELETE FROM users WHERE email = ${email}`;
+  await sql`DELETE FROM users WHERE email = ${deliveryEmail}`;
 });
 
 test("mobile auth works against an isolated Neon branch", async () => {
@@ -168,4 +186,20 @@ test("mobile auth works against an isolated Neon branch", async () => {
   `;
   const expiredState = await api(`/api/line/callback?state=${encodeURIComponent(expiringState)}&error=access_denied`);
   assert.equal(new URL(expiredState.headers.get("location")).searchParams.get("status"), "expired");
+});
+
+test("failed email delivery removes the generated OTP row", async () => {
+  const response = await api("/api/auth/request-code", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: deliveryEmail }),
+  });
+  assert.equal(response.status, 503);
+
+  const [remaining] = await sql`
+    SELECT count(*)::int AS count
+    FROM authentication_codes
+    WHERE email = ${deliveryEmail}
+  `;
+  assert.equal(remaining.count, 0);
 });

@@ -8,7 +8,7 @@ import {
   generateAuthCode,
   hashSecret,
 } from "../../../../lib/crypto";
-import { sendVerificationCode } from "../../../../lib/email";
+import { EmailDeliveryError, sendVerificationCode } from "../../../../lib/email";
 import { normalizeAllowedAuthEmail } from "../../../../lib/auth-email";
 
 export const runtime = "nodejs";
@@ -37,12 +37,27 @@ export async function POST(request: Request) {
     }
 
     const code = generateAuthCode();
-    await db.insert(authenticationCodes).values({
+    const [created] = await db.insert(authenticationCodes).values({
       email,
       codeHash: hashSecret(code),
       expiresAt: new Date(Date.now() + AUTH_CODE_TTL_SECONDS * 1000),
-    });
-    await sendVerificationCode({ email, code });
+    }).returning({ id: authenticationCodes.id });
+    try {
+      await sendVerificationCode({ email, code });
+    } catch (error) {
+      await db.delete(authenticationCodes).where(eq(authenticationCodes.id, created.id));
+      if (error instanceof EmailDeliveryError) {
+        console.error("[setlog auth] verification email rejected", {
+          status: error.status,
+          providerMessage: error.providerMessage,
+        });
+      } else {
+        console.error("[setlog auth] verification email unavailable", {
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ sent: true, expiresIn: AUTH_CODE_TTL_SECONDS });
   } catch {
