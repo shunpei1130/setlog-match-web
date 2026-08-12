@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { isLocalTestBrowser } from "../lib/local-test";
 import {
@@ -137,7 +138,8 @@ type LineAdapter = {
   scheduleReminder: (eventKey: string) => Promise<void>;
 };
 
-const STORAGE_KEY = "setlog-match-mvp-state-v4";
+const STORAGE_KEY = "set-mob-state-v1";
+const LEGACY_STORAGE_KEYS = ["setlog-match-mvp-state-v4"] as const;
 const DEMO_EVENT_KEY = "next-saturday";
 
 const profileFieldLabels: Record<ProfileField, string> = {
@@ -318,7 +320,8 @@ export default function Home() {
   const localTest = hydrated && isLocalTestBrowser();
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = window.localStorage.getItem(STORAGE_KEY)
+      ?? LEGACY_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Partial<StoredState>;
@@ -340,8 +343,10 @@ export default function Home() {
             source,
           },
         }));
+        LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
+        LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
       }
     }
     // Browser storage is intentionally read after hydration to avoid SSR/client markup drift.
@@ -510,6 +515,7 @@ export default function Home() {
   const resetDemo = () => {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
+      LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
     } catch {
       // The visual demo should still be reset when browser storage is unavailable.
     }
@@ -968,7 +974,7 @@ export default function Home() {
   if (!hydrated) {
     return (
       <main className="loading-screen">
-        <div className="brand-mark brand-mark--large">S</div>
+        <Image className="brand-mark brand-mark--large brand-mark--image" src="/set-mob-avatar.png" alt="" width={104} height={104} priority />
         <p>土曜日を準備しています…</p>
       </main>
     );
@@ -977,10 +983,10 @@ export default function Home() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand" aria-label="Setlog Match">
-          <span className="brand-mark">S</span>
+        <div className="brand" aria-label="set-mob">
+          <Image className="brand-mark brand-mark--image" src="/set-mob-avatar.png" alt="" width={72} height={72} priority />
           <span>
-            <strong>setlog match</strong>
+            <strong>set-mob</strong>
             <small>SATURDAY ISSUE / 001</small>
           </span>
         </div>
@@ -1031,7 +1037,7 @@ export default function Home() {
         {state.phase === "landing" && (
           <section className="landing-grid">
             <div className="hero-copy">
-              <p className="eyebrow">SETLOG / SATURDAY ISSUE 001</p>
+              <p className="eyebrow">SET-MOB / SATURDAY ISSUE 001</p>
               <h1>青学の知らない人の一日、<em>見てみない？</em></h1>
               <p className="hero-lede">
                 写真で選ぶ前に、その人の普通の土曜日を見る。Setlogで一日を共有して、夜にお互いの気持ちを静かに確かめます。
@@ -1342,7 +1348,7 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="app-footer"><span>setlog match / SATURDAY ISSUE 001</span><span>青学生限定。連絡先は相互同意まで非公開です。</span></footer>
+      <footer className="app-footer"><span>set-mob / SATURDAY ISSUE 001</span><span>青学生限定。連絡先は相互同意まで非公開です。</span><span>set-mobは独立運営のサービスで、Setlogの公式・公認サービスではありません。</span></footer>
 
       {safetyOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setSafetyOpen(false)}>

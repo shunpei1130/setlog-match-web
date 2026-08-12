@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       if (!claim) continue;
 
       try {
-        await pushLineMessage(row.lineUserId, "明日はマッチング！\n参加アンケートを確認して、土曜の一日を始める準備をしてください。\n\nSetlog Match");
+        await pushLineMessage(row.lineUserId, "明日はマッチング！\n参加アンケートを確認して、土曜の一日を始める準備をしてください。\n\nset-mob");
         sent += 1;
       } catch (error) {
         await db.delete(lineReminderDeliveries).where(eq(lineReminderDeliveries.id, claim.id));

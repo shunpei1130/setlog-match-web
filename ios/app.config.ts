@@ -1,21 +1,21 @@
 import type { ExpoConfig } from "expo/config";
 
 const config: ExpoConfig = {
-  name: "Setlog Match",
-  slug: "setlog-match-ios",
+  name: "set-mob",
+  slug: "set-mob-ios",
   version: "1.0.0",
   orientation: "portrait",
-  icon: "./assets/images/icon.png",
-  scheme: "setlogmatch",
+  icon: "./assets/images/set-mob-icon.png",
+  scheme: "setmob",
   userInterfaceStyle: "light",
   ios: {
-    bundleIdentifier: "jp.setlog.match",
+    bundleIdentifier: "jp.setmob.app",
     supportsTablet: false,
     config: { usesNonExemptEncryption: false },
   },
   web: {
     output: "static",
-    favicon: "./assets/images/favicon.png",
+    favicon: "./assets/images/set-mob-icon.png",
   },
   plugins: [
     "expo-router",
@@ -24,7 +24,7 @@ const config: ExpoConfig = {
       "expo-splash-screen",
       {
         backgroundColor: "#f5f4ee",
-        image: "./assets/images/icon.png",
+        image: "./assets/images/set-mob-icon.png",
         imageWidth: 96,
       },
     ],

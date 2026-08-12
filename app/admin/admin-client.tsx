@@ -156,7 +156,7 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
   return (
     <main className="admin-page">
       <header className="admin-header">
-        <div><p className="eyebrow">Setlog Match / 管理画面</p><h1>次回土曜を準備する。</h1></div>
+        <div><p className="eyebrow">set-mob / 管理画面</p><h1>次回土曜を準備する。</h1></div>
         <div className="admin-header__account"><span>{adminEmail}</span><Link href="/">参加者画面</Link></div>
       </header>
       {notice && <p className="admin-notice" role="status">{notice}</p>}

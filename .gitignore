@@ -45,3 +45,4 @@ next-env.d.ts
 /work/
 .dev-server*.log
 .gh-auth*.log
+/social-media-assets/account-credentials.md

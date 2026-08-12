@@ -1,5 +1,5 @@
 {
-  "name": "setlog-match-ios",
+  "name": "set-mob-ios",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "engines": {
@@ -7,14 +7,14 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~57.0.11",
+    "expo": "~57.0.12",
     "expo-clipboard": "~57.0.1",
-    "expo-constants": "~57.0.9",
-    "expo-dev-client": "~57.0.10",
+    "expo-constants": "~57.0.10",
+    "expo-dev-client": "~57.0.11",
     "expo-linking": "~57.0.5",
-    "expo-router": "~57.0.11",
+    "expo-router": "~57.0.12",
     "expo-secure-store": "~57.0.1",
-    "expo-splash-screen": "~57.0.5",
+    "expo-splash-screen": "~57.0.6",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
     "expo-web-browser": "~57.0.2",
@@ -30,7 +30,7 @@
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "jest": "~29.7.0",
-    "jest-expo": "~57.0.3",
+    "jest-expo": "~57.0.4",
     "typescript": "~6.0.3"
   },
   "scripts": {

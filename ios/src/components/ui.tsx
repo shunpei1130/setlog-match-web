@@ -38,10 +38,10 @@ export function Page({ children, footer }: PropsWithChildren<{ footer?: ReactNod
 export function AppHeader({ signedIn, onSignOut }: { signedIn: boolean; onSignOut: () => void }) {
   return (
     <View style={styles.header}>
-      <View style={styles.brand} accessibilityLabel="Setlog Match">
-        <View style={styles.brandMark}><Text style={styles.brandMarkText}>S</Text></View>
+      <View style={styles.brand} accessibilityLabel="set-mob">
+        <View style={styles.brandMark}><Text style={styles.brandMarkText}>m</Text></View>
         <View>
-          <Text style={styles.brandTitle}>setlog match</Text>
+          <Text style={styles.brandTitle}>set-mob</Text>
           <Text style={styles.brandCaption}>SATURDAY ISSUE</Text>
         </View>
       </View>
@@ -74,7 +74,7 @@ export function Progress({ phase }: { phase: AppPhase }) {
   return (
     <View style={styles.progress} accessibilityLabel={`${step.label}、全5段階中${step.current}段階`}>
       <View style={styles.progressRow}>
-        <Text style={styles.micro}>SETLOG MATCH</Text>
+        <Text style={styles.micro}>SET-MOB</Text>
         <Text style={styles.micro}>{step.current} / 5</Text>
       </View>
       <View style={styles.progressTrack}>

@@ -1,6 +1,8 @@
-# Setlog Match Web
+# set-mob Web
 
-青学生限定で、毎週土曜に開催するSetlog連携型マッチングアプリです。参加者は青学メールで認証し、LINEで案内を受け取り、運営が公開したDay PairとSetlog参加情報を確認します。
+青学生限定で、毎週土曜に開催する独立ブランドのマッチングサービスです。参加目的は「友人／恋愛／どちらでも」から選べます。参加者は青学メールで認証し、LINEで案内を受け取り、運営が公開したDay Pairと外部アプリSetlogの参加情報を確認します。
+
+set-mobはSetlogの公式・公認サービスではありません。Setlog本体の公開APIは仮定せず、運営が登録したURL／参加コードだけを連携に使用します。
 
 ## Neon DB
 
@@ -75,3 +77,8 @@ npm run build
 - `app/api/pairs/`: Day Pair、意思決定、連絡先開示、安全API
 - `db/`、`drizzle/`: Neon Postgresのスキーマとマイグレーション
 - `tests/rendered-html.test.mjs`: ビルド後HTMLと主要仕様のテスト
+
+## 運営
+
+- 運営者: 長谷川峻平
+- 問い合わせ: `s.hasegawa1130@gmail.com`

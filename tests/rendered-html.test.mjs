@@ -21,13 +21,13 @@ async function render(path = "/", init = {}, host = "localhost") {
   );
 }
 
-test("server-renders the Setlog Match MVP", async () => {
+test("server-renders the set-mob MVP", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>setlog \/ saturday issue \| 青学生限定<\/title>/i);
+  assert.match(html, /<title>set-mob \| 青学生限定の土曜マッチング<\/title>/i);
   assert.match(html, /土曜日を準備しています/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
@@ -104,7 +104,7 @@ test("accepts the LINE bypass only on localhost", async () => {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
-  }, "setlog-match.example");
+  }, "set-mob.example");
   assert.equal(productionResponse.status, 400);
   assert.deepEqual(await productionResponse.json(), { error: "LOCAL_TEST_BYPASS_NOT_ALLOWED" });
 });
@@ -192,6 +192,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /scheduleReminder/);
   assert.match(page, /LINE登録を完了する/);
   assert.match(page, /明日はマッチング！/);
+  assert.match(page, /set-mob-state-v1/);
   assert.match(page, /setlog-match-mvp-state-v4/);
   assert.match(page, /line-modal/);
   assert.match(page, /schoolEmail/);
@@ -262,7 +263,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(envExample, /LINE_CHANNEL_SECRET=/);
   assert.match(envExample, /CRON_SECRET=/);
   assert.match(layout, /lang="ja"/);
-  assert.match(layout, /setlog \/ saturday issue \| 青学生限定/);
+  assert.match(layout, /set-mob \| 青学生限定の土曜マッチング/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url)));

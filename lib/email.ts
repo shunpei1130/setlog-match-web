@@ -16,7 +16,7 @@ export async function sendVerificationCode({ email, code }: VerificationEmail) {
 
   if (!apiKey || !from) {
     if (process.env.NODE_ENV !== "production" && process.env.AUTH_DELIVERY_MODE === "console") {
-      console.info(`[setlog auth] verification code for ${email}: ${code}`);
+      console.info(`[set-mob auth] verification code for ${email}: ${code}`);
       return;
     }
     throw new EmailConfigurationError();
@@ -31,9 +31,9 @@ export async function sendVerificationCode({ email, code }: VerificationEmail) {
     body: JSON.stringify({
       from,
       to: [email],
-      subject: "Setlog Matchの認証コード",
-      text: `Setlog Matchの認証コードは ${code} です。10分以内に入力してください。\n\n心当たりがない場合は、このメールを無視してください。`,
-      html: `<p>Setlog Matchの認証コードは<strong>${code}</strong>です。</p><p>10分以内に入力してください。心当たりがない場合は、このメールを無視してください。</p>`,
+      subject: "set-mobの認証コード",
+      text: `set-mobの認証コードは ${code} です。10分以内に入力してください。\n\n心当たりがない場合は、このメールを無視してください。`,
+      html: `<p>set-mobの認証コードは<strong>${code}</strong>です。</p><p>10分以内に入力してください。心当たりがない場合は、このメールを無視してください。</p>`,
     }),
   });
 

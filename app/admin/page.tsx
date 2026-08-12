@@ -12,7 +12,7 @@ export default async function AdminPage() {
     return (
       <main className="admin-page">
         <section className="admin-card">
-          <p className="eyebrow">Setlog Match / 運営</p>
+          <p className="eyebrow">set-mob / 運営</p>
           <h1>運営権限がありません。</h1>
           <p>この画面は登録された運営メールアドレスだけが利用できます。</p>
           <Link className="secondary-button" href="/">参加者画面へ戻る</Link>

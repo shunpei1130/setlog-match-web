@@ -13,7 +13,7 @@ type CallbackTarget = { kind: "web" | "mobile"; userId: string };
 
 function redirectFor(request: Request, kind: CallbackTarget["kind"], status: string) {
   if (kind === "mobile") {
-    return NextResponse.redirect(new URL(`setlogmatch://line-callback?status=${encodeURIComponent(status)}`));
+    return NextResponse.redirect(new URL(`setmob://line-callback?status=${encodeURIComponent(status)}`));
   }
   return NextResponse.redirect(new URL(`/?line=${encodeURIComponent(status)}`, request.url));
 }

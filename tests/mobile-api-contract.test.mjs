@@ -45,7 +45,7 @@ test("mobile LINE state is hashed, expiring, and one-time", async () => {
   assert.match(migration, /CREATE TABLE "line_login_states"/);
   assert.match(login, /10 \* 60 \* 1000/);
   assert.match(login, /stateHash: hashSecret\(state\)/);
-  assert.match(login, /setlogmatch:\/\/line-callback/);
+  assert.match(login, /setmob:\/\/line-callback/);
   assert.match(callback, /isNull\(lineLoginStates\.consumedAt\)/);
   assert.match(callback, /gt\(lineLoginStates\.expiresAt, now\)/);
   assert.match(callback, /consumedAt: now/);
