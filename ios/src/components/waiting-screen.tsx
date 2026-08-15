@@ -1,4 +1,4 @@
-import { BusyButton, Card, Eyebrow, Lead, Title } from "@/components/ui";
+import { ActionButton, BusyButton, Card, Eyebrow, Lead, Title } from "@/components/ui";
 import { colors } from "@/theme";
 import type { EventState } from "@/types";
 import { StyleSheet, Text, View } from "react-native";
@@ -7,11 +7,20 @@ export function WaitingScreen({
   event,
   busy,
   onStart,
+  onCancel,
 }: {
   event: EventState;
   busy: boolean;
   onStart: () => Promise<void>;
+  onCancel: () => Promise<void>;
 }) {
+  const eventDate = new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(event.startsAt));
+
   return (
     <View style={styles.container}>
       <Eyebrow>03 / RESERVED</Eyebrow>
@@ -20,7 +29,7 @@ export function WaitingScreen({
       <Card accent>
         <View style={styles.cardHeader}>
           <Text style={styles.status}>● 事前登録済み</Text>
-          <Text style={styles.issue}>NEXT SATURDAY</Text>
+          <Text style={styles.issue}>{eventDate}</Text>
         </View>
         <Text style={styles.time}>12:00</Text>
         <Text style={styles.timeLabel}>マッチング開始</Text>
@@ -37,6 +46,15 @@ export function WaitingScreen({
       <BusyButton busy={busy} busyLabel="ペアを確認中…" onPress={() => void onStart()}>
         土曜のマッチングを開始する →
       </BusyButton>
+      {event.canCancel ? (
+        <ActionButton
+          disabled={busy}
+          variant="secondary"
+          onPress={() => void onCancel()}
+        >
+          {busy ? "処理中…" : "今回の参加をキャンセル"}
+        </ActionButton>
+      ) : null}
       <Text style={styles.note}>ペアが未公開の場合は、この画面でそのままお待ちください。</Text>
     </View>
   );

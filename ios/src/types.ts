@@ -31,16 +31,25 @@ export type EventRegistration = {
   faculty: string | null;
   academicYear: string | null;
   gender: string | null;
+  purpose: "friend" | "romance" | "either";
+  preferredGender: "any" | "male" | "female" | "other";
   ageConfirmed: boolean;
   rulesAccepted: boolean;
 };
 
 export type EventState = {
+  eventKey: string;
   registration: EventRegistration | null;
   count: number;
   capacity: number;
   remaining: number;
   updatedAt: string;
+  startsAt: string;
+  registrationClosesAt: string;
+  decisionOpensAt: string;
+  registrationOpen: boolean;
+  canCancel: boolean;
+  decisionOpen: boolean;
 };
 
 export type DecisionOption = "instagram" | "line" | "continue" | "none";
@@ -62,6 +71,9 @@ export type PairResult = {
 export type RemotePair = {
   id: string;
   eventKey: string;
+  startsAt: string;
+  decisionOpensAt: string;
+  decisionOpen: boolean;
   status: "published";
   setlogUrl: string | null;
   setlogCode: string | null;
@@ -83,6 +95,10 @@ export type RegistrationInput = {
     faculty: string;
     academicYear: string;
     gender: string;
+  };
+  preferences: {
+    purpose: "friend" | "romance" | "either";
+    preferredGender: "any" | "male" | "female" | "other";
   };
   contacts: {
     instagramHandle: string | null;

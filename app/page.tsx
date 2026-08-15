@@ -1,15 +1,20 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { isLocalTestBrowser } from "../lib/local-test";
 import {
   PROFILE_GENDERS,
   PROFILE_YEARS,
+  GENDER_PREFERENCES,
+  MATCH_PURPOSES,
   type ContactField,
+  type PreferenceField,
   type ProfileField,
   type RegistrationProfile,
   validateContactHandles,
+  validateRegistrationPreferences,
   validateRegistrationProfile,
 } from "../lib/profile";
 import { normalizeEmailAddress } from "../lib/school-email";
@@ -37,6 +42,11 @@ type WaitingCountState = {
   capacity: number | null;
   remaining: number | null;
   updatedAt?: string;
+  startsAt?: string;
+  decisionOpensAt?: string;
+  registrationOpen?: boolean;
+  canCancel?: boolean;
+  decisionOpen?: boolean;
 };
 
 type UserProfile = {
@@ -48,6 +58,7 @@ type UserProfile = {
   lineContact: string;
   campus: string;
   purpose: string;
+  preferredGender: string;
   interests: string[];
 };
 
@@ -89,6 +100,9 @@ type ResultState = {
 type RemotePair = {
   id: string;
   eventKey: string;
+  startsAt: string;
+  decisionOpensAt: string;
+  decisionOpen: boolean;
   status: "draft" | "published" | "closed" | "blocked";
   setlogUrl: string | null;
   setlogCode: string | null;
@@ -155,6 +169,19 @@ const profileGenderLabels: Record<RegistrationProfile["gender"], string> = {
   other: "その他",
 };
 
+const matchPurposeLabels = {
+  friend: "友人として知り合いたい",
+  romance: "恋愛を前提に知り合いたい",
+  either: "どちらでも",
+} as const;
+
+const genderPreferenceLabels = {
+  any: "問わない",
+  male: "男性",
+  female: "女性",
+  other: "その他",
+} as const;
+
 const candidates: Candidate[] = [
   {
     id: "candidate-aoi",
@@ -199,7 +226,8 @@ const initialProfile: UserProfile = {
   instagramHandle: "",
   lineContact: "",
   campus: "",
-  purpose: "まずは一日の過ごし方を知りたい",
+  purpose: "",
+  preferredGender: "any",
   interests: ["カフェ", "音楽", "散歩"],
 };
 
@@ -301,6 +329,7 @@ export default function Home() {
   const [lineConnecting, setLineConnecting] = useState(false);
   const [participationSubmitting, setParticipationSubmitting] = useState(false);
   const [profileErrors, setProfileErrors] = useState<Partial<Record<ProfileField, string>>>({});
+  const [preferenceErrors, setPreferenceErrors] = useState<Partial<Record<PreferenceField, string>>>({});
   const [contactErrors, setContactErrors] = useState<Partial<Record<ContactField, string>>>({});
   const [waitingCount, setWaitingCount] = useState<WaitingCountState>({
     status: "loading",
@@ -400,6 +429,23 @@ export default function Home() {
   }, [hydrated, localTest]);
 
   useEffect(() => {
+    if (!hydrated || localTest) return;
+    const params = new URLSearchParams(window.location.search);
+    void fetch("/api/analytics/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: params.get("ref"),
+        utm_source: params.get("utm_source"),
+        utm_medium: params.get("utm_medium"),
+        utm_campaign: params.get("utm_campaign"),
+        landingPath: `${window.location.pathname}${window.location.search}`,
+      }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [hydrated, localTest]);
+
+  useEffect(() => {
     if (!hydrated) return;
     const scrollReset = window.setTimeout(() => {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -413,15 +459,22 @@ export default function Home() {
     const refreshWaitingCount = async () => {
       setWaitingCount((previous) => ({ ...previous, status: previous.count === null ? "loading" : previous.status }));
       try {
-        const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/waiting-count`, {
+        const requestedEventKey = localTest ? state.eventKey : DEMO_EVENT_KEY;
+        const response = await fetch(`/api/events/${encodeURIComponent(requestedEventKey)}/waiting-count`, {
           cache: "no-store",
         });
         if (!response.ok) throw new Error("Waiting count unavailable");
         const payload = await response.json() as {
+          eventKey?: unknown;
           count?: unknown;
           capacity?: unknown;
           remaining?: unknown;
           updatedAt?: string;
+          startsAt?: unknown;
+          decisionOpensAt?: unknown;
+          registrationOpen?: unknown;
+          canCancel?: unknown;
+          decisionOpen?: unknown;
         };
         if (
           typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0
@@ -438,7 +491,30 @@ export default function Home() {
             capacity: payload.capacity,
             remaining: payload.remaining,
             updatedAt: payload.updatedAt,
+            startsAt: typeof payload.startsAt === "string" ? payload.startsAt : undefined,
+            decisionOpensAt: typeof payload.decisionOpensAt === "string" ? payload.decisionOpensAt : undefined,
+            registrationOpen: payload.registrationOpen === true,
+            canCancel: payload.canCancel === true,
+            decisionOpen: payload.decisionOpen === true,
           });
+          if (typeof payload.eventKey === "string" && payload.eventKey !== state.eventKey) {
+            setRemotePair(null);
+            setState((previous) => ({
+              ...previous,
+              eventKey: payload.eventKey as string,
+              participation: false,
+              matchingStarted: false,
+              phase: previous.phase === "landing" ? "landing" : "participation",
+              rankByCandidate: {},
+              pair: null,
+              setlogStatus: "idle",
+              decision: createInitialState().decision,
+              result: null,
+              notice: previous.eventKey === DEMO_EVENT_KEY
+                ? previous.notice
+                : "次の土曜の参加受付へ切り替わりました。",
+            }));
+          }
         }
       } catch {
         if (!cancelled) setWaitingCount((previous) => ({ ...previous, status: "error" }));
@@ -451,7 +527,7 @@ export default function Home() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [state.eventKey]);
+  }, [localTest, state.eventKey]);
 
   useEffect(() => {
     const pairId = state.pair?.pairId;
@@ -528,6 +604,7 @@ export default function Home() {
     setLineModalOpen(false);
     setLineConnecting(false);
     setProfileErrors({});
+    setPreferenceErrors({});
     setContactErrors({});
     setRemotePair(null);
     setSchoolEmail("");
@@ -535,12 +612,21 @@ export default function Home() {
     setAuthCodeSent(false);
   };
 
-  const updateProfile = (field: "nickname" | "faculty" | "year" | "gender", value: string) => {
+  const updateProfile = (field: "nickname" | "faculty" | "year" | "gender" | "purpose" | "preferredGender", value: string) => {
     setState((previous) => ({
       ...previous,
       profile: { ...previous.profile, [field]: value },
       notice: null,
     }));
+    if (field === "purpose" || field === "preferredGender") {
+      setPreferenceErrors((previous) => {
+        if (!previous[field]) return previous;
+        const next = { ...previous };
+        delete next[field];
+        return next;
+      });
+      return;
+    }
     const apiField: ProfileField = field === "year" ? "academicYear" : field;
     setProfileErrors((previous) => {
       if (!previous[apiField]) return previous;
@@ -634,6 +720,19 @@ export default function Home() {
       return;
     }
     setProfileErrors({});
+    const preferenceValidation = validateRegistrationPreferences({
+      purpose: state.profile.purpose,
+      preferredGender: state.profile.preferredGender,
+    });
+    if (!preferenceValidation.preferences) {
+      const nextErrors: Partial<Record<PreferenceField, string>> = {};
+      preferenceValidation.missing.forEach((field) => { nextErrors[field] = "選択してください。"; });
+      preferenceValidation.invalid.forEach((field) => { nextErrors[field] = "選択肢から選んでください。"; });
+      setPreferenceErrors(nextErrors);
+      updateState({ notice: "利用目的と希望する相手を選んでください。" });
+      return;
+    }
+    setPreferenceErrors({});
     const contactValidation = validateContactHandles({
       instagramHandle: state.profile.instagramHandle,
       lineContact: state.profile.lineContact,
@@ -673,6 +772,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile: profileValidation.profile,
+          preferences: preferenceValidation.preferences,
           contacts: contactValidation.contacts,
           ageConfirmed: state.consent.age,
           rulesAccepted: state.consent.rules,
@@ -688,6 +788,11 @@ export default function Home() {
         capacity?: unknown;
         remaining?: unknown;
         updatedAt?: string;
+        startsAt?: unknown;
+        decisionOpensAt?: unknown;
+        registrationOpen?: unknown;
+        canCancel?: unknown;
+        decisionOpen?: unknown;
         fields?: unknown;
       } | null;
       if ((payload?.error === "PROFILE_REQUIRED" || payload?.error === "PROFILE_INVALID") && Array.isArray(payload.fields)) {
@@ -712,6 +817,10 @@ export default function Home() {
         updateState({ notice: "初回募集は定員に達しました。今回は受付を終了しました。" });
         return;
       }
+      if (response.status === 409 && payload?.error === "EVENT_REGISTRATION_CLOSED") {
+        updateState({ notice: "今回の参加登録は締め切りました。次回開催をお待ちください。" });
+        return;
+      }
       if (!response.ok || !payload) throw new Error("Registration unavailable");
       if (
         typeof payload.count !== "number" || !Number.isInteger(payload.count) || payload.count < 0
@@ -726,8 +835,18 @@ export default function Home() {
         capacity: payload.capacity,
         remaining: payload.remaining,
         updatedAt: payload.updatedAt,
+        startsAt: typeof payload.startsAt === "string" ? payload.startsAt : undefined,
+        decisionOpensAt: typeof payload.decisionOpensAt === "string" ? payload.decisionOpensAt : undefined,
+        registrationOpen: payload.registrationOpen === true,
+        canCancel: payload.canCancel === true,
+        decisionOpen: payload.decisionOpen === true,
       });
-      updateState({ participation: true, matchingStarted: false, phase: "waiting", notice: null });
+      updateState({
+        participation: true,
+        matchingStarted: false,
+        phase: "waiting",
+        notice: null,
+      });
     } catch {
       updateState({ notice: "事前登録を保存できませんでした。通信を確認して、もう一度お試しください。" });
     } finally {
@@ -747,6 +866,33 @@ export default function Home() {
       ? `残り${waitingCount.remaining}枠`
       : "残り枠を確認中…";
   const eventIsFull = waitingCount.status === "ready" && waitingCount.remaining === 0;
+  const decisionIsOpen = !remotePair || remotePair.decisionOpen || waitingCount.decisionOpen === true;
+  const eventDateText = waitingCount.startsAt
+    ? new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(waitingCount.startsAt))
+    : "次回土曜";
+
+  const cancelParticipation = async () => {
+    if (localTest) {
+      updateState({ participation: false, matchingStarted: false, phase: "participation", notice: "今回の参加をキャンセルしました。" });
+      return;
+    }
+    setParticipationSubmitting(true);
+    try {
+      const response = await fetch(`/api/events/${encodeURIComponent(state.eventKey)}/registrations`, { method: "DELETE" });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (response.status === 409 && payload?.error === "REGISTRATION_CANCELLATION_CLOSED") {
+        updateState({ notice: "開始時刻を過ぎたため、アプリからはキャンセルできません。" });
+        return;
+      }
+      if (!response.ok) throw new Error("Cancellation unavailable");
+      setRemotePair(null);
+      updateState({ participation: false, matchingStarted: false, phase: "participation", pair: null, notice: "今回の参加をキャンセルしました。開始前なら、もう一度登録できます。" });
+    } catch {
+      updateState({ notice: "参加をキャンセルできませんでした。通信を確認して、もう一度お試しください。" });
+    } finally {
+      setParticipationSubmitting(false);
+    }
+  };
 
   const completeLineRegistration = async () => {
     if (!localTest) {
@@ -862,7 +1008,13 @@ export default function Home() {
     }
   };
 
-  const openDecision = () => updateState({ phase: "decision", notice: null });
+  const openDecision = () => {
+    if (!decisionIsOpen) {
+      updateState({ notice: "非公開判定は土曜22時から回答できます。" });
+      return;
+    }
+    updateState({ phase: "decision", notice: null });
+  };
 
   const toggleDecision = (option: DecisionOption) => {
     setState((previous) => {
@@ -913,7 +1065,7 @@ export default function Home() {
         });
         const payload = await response.json().catch(() => null) as { error?: string; result?: ResultState; pair?: RemotePair } | null;
         if (!response.ok || !payload?.pair) {
-          updateState({ notice: payload?.error === "INSTAGRAM_CONTACT_REQUIRED" ? "Instagramの連絡先を事前登録してください。" : payload?.error === "LINE_CONTACT_REQUIRED" ? "LINEの連絡先を事前登録してください。" : "回答を保存できませんでした。もう一度お試しください。" });
+          updateState({ notice: payload?.error === "INSTAGRAM_CONTACT_REQUIRED" ? "Instagramの連絡先を事前登録してください。" : payload?.error === "LINE_CONTACT_REQUIRED" ? "LINEの連絡先を事前登録してください。" : payload?.error === "DECISION_NOT_OPEN" ? "非公開判定は土曜22時から回答できます。" : "回答を保存できませんでした。もう一度お試しください。" });
           return;
         }
         setRemotePair(payload.pair);
@@ -1008,6 +1160,8 @@ export default function Home() {
                   安全メニュー
                 </button>
               )}
+              <Link role="menuitem" href="/safety">安全ガイド</Link>
+              <Link role="menuitem" href="/contact">問い合わせ・削除</Link>
               <button type="button" role="menuitem" onClick={resetDemo}>
                 最初からやり直す
               </button>
@@ -1166,6 +1320,23 @@ export default function Home() {
                 {profileErrors.gender && <small id="profile-gender-error" className="field-error" role="alert">{profileErrors.gender}</small>}
               </div>
               <div className="profile-field">
+                <label htmlFor="profile-purpose"><span>利用目的</span><span className="required-mark">必須</span></label>
+                <select id="profile-purpose" value={state.profile.purpose} required aria-required="true" aria-invalid={Boolean(preferenceErrors.purpose)} aria-describedby={preferenceErrors.purpose ? "profile-purpose-error" : "profile-purpose-help"} onChange={(event) => updateProfile("purpose", event.target.value)}>
+                  <option value="">選択してください</option>
+                  {MATCH_PURPOSES.map((purpose) => <option key={purpose} value={purpose}>{matchPurposeLabels[purpose]}</option>)}
+                </select>
+                <small id="profile-purpose-help">同じ目的、または「どちらでも」の人だけを運営候補にします。</small>
+                {preferenceErrors.purpose && <small id="profile-purpose-error" className="field-error" role="alert">{preferenceErrors.purpose}</small>}
+              </div>
+              <div className="profile-field">
+                <label htmlFor="profile-preferred-gender"><span>希望する相手</span><span className="required-mark">必須</span></label>
+                <select id="profile-preferred-gender" value={state.profile.preferredGender} required aria-required="true" aria-invalid={Boolean(preferenceErrors.preferredGender)} aria-describedby={preferenceErrors.preferredGender ? "profile-preferred-gender-error" : "profile-preferred-gender-help"} onChange={(event) => updateProfile("preferredGender", event.target.value)}>
+                  {GENDER_PREFERENCES.map((gender) => <option key={gender} value={gender}>{genderPreferenceLabels[gender]}</option>)}
+                </select>
+                <small id="profile-preferred-gender-help">お互いの希望が一致する組み合わせだけを作成できます。</small>
+                {preferenceErrors.preferredGender && <small id="profile-preferred-gender-error" className="field-error" role="alert">{preferenceErrors.preferredGender}</small>}
+              </div>
+              <div className="profile-field">
                 <label htmlFor="profile-instagram"><span>Instagramユーザーネーム</span><span className="optional-note">任意</span></label>
                 <input
                   id="profile-instagram"
@@ -1259,13 +1430,14 @@ export default function Home() {
             <h2>事前登録が、<br /><em>完了しました。</em></h2>
             <p className="section-lede">次回土曜の参加枠を確保しています。候補者と希望順位は、土曜のマッチング開始後に表示されます。</p>
             <div className="waiting-card">
-              <div className="waiting-card__top"><span className="status-pill status-pill--light"><span className="status-dot" />事前登録済み</span><span className="event-number">NEXT SATURDAY</span></div>
-              <div className="waiting-card__date"><span>毎週土曜</span><strong>12:00</strong><small>マッチング開始</small></div>
+              <div className="waiting-card__top"><span className="status-pill status-pill--light"><span className="status-dot" />事前登録済み</span><span className="event-number">{eventDateText}</span></div>
+              <div className="waiting-card__date"><span>{eventDateText}</span><strong>12:00</strong><small>マッチング開始</small></div>
               <div className="waiting-card__copy"><strong>土曜になったら、ここから開始</strong><p>開始ボタンを押すまで、候補者や相手の情報は表示されません。</p></div>
               <div className="waiting-card__line"><span className="line-badge">LINE</span><div><strong>金曜21:00の案内を予約済み</strong><p>「明日はマッチング！」と参加アンケートをLINEでお送りします。</p></div></div>
               <div className="waiting-card__count" aria-live="polite"><span className="label">初回募集 / 100人限定</span><strong>{remainingSlotsText}</strong><p>{waitingCountText}。次回土曜に参加予定の青学生です。</p></div>
             </div>
             <button className="primary-button full-width" onClick={() => void startMatching()} disabled={pairLoading}>{pairLoading ? "ペアを確認中…" : "土曜のマッチングを開始する"} <span>→</span></button>
+            {(localTest || waitingCount.canCancel) && <button className="secondary-button full-width" type="button" onClick={() => void cancelParticipation()} disabled={participationSubmitting}>{participationSubmitting ? "キャンセル中…" : "今回の参加をキャンセル"}</button>}
             <p className="waiting-note">運営がペアを公開すると、ここから今日の相手を確認できます。</p>
           </section>
         )}
@@ -1318,7 +1490,7 @@ export default function Home() {
             <h2>今日は、<em>一日の共有から。</em></h2>
             <p className="section-lede">Setlogでお互いの土曜日を共有します。連絡先交換の話は、夜の判定までしなくて大丈夫です。</p>
             <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">setlog<span>↗</span></div><span className="status-pill status-pill--light">Day Pairの部屋</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">今日の共有ルーム</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 一日のログ</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>Setlogの準備ができました</strong><p>{remotePair ? "運営が登録したルームを確認できます。" : "今日は一日を楽しんでください。22時にここへ戻ってきます。"}</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>接続できませんでした</strong><p>通信を確認して、もう一度試してください。</p></div> : <div className="setlog-card__action"><p>{remotePair ? "運営が登録したSetlogルームを確認します。" : "接続はデモモードで行われます。"}</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "接続中…" : "Setlogを準備する"}<span>↗</span></button></div>}{remotePair && state.setlogStatus === "connected" && <div className="setlog-access"><span className="label">運営からの参加情報</span><strong>{remotePair.setlogCode}</strong>{remotePair.setlogUrl && <a href={remotePair.setlogUrl} target="_blank" rel="noreferrer">Setlogを開く ↗</a>}</div>}</div>
-            {state.setlogStatus === "connected" && <><div className="setlog-next"><div><span className="label">NEXT</span><strong>22時に判定画面が開きます</strong><p>Instagram、LINE、もう一日、何も教えない。答えは相手には見えません。</p></div></div><button className="primary-button full-width" onClick={openDecision}>夜の判定へ進む <span>→</span></button></>}
+            {state.setlogStatus === "connected" && <><div className="setlog-next"><div><span className="label">NEXT</span><strong>22時に判定画面が開きます</strong><p>Instagram、LINE、もう一日、何も教えない。答えは相手には見えません。</p></div></div><button className="primary-button full-width" onClick={openDecision} disabled={!decisionIsOpen}>{decisionIsOpen ? "夜の判定へ進む" : "22時から回答できます"} <span>→</span></button></>}
             {state.setlogStatus === "error" && <button className="primary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
           </section>
         )}
@@ -1349,7 +1521,7 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="app-footer"><span>set-mob / SATURDAY ISSUE 001</span><span>青学生限定。連絡先は相互同意まで非公開です。</span><span>set-mobは独立運営のサービスで、Setlogの公式・公認サービスではありません。</span></footer>
+      <footer className="app-footer"><span>set-mob / SATURDAY ISSUE 001</span><span>青学生限定。連絡先は相互同意まで非公開です。</span><nav aria-label="規約とサポート"><Link href="/terms">利用規約</Link><Link href="/privacy">プライバシー</Link><Link href="/safety">安全ガイド</Link><Link href="/contact">問い合わせ・削除</Link></nav><span>set-mobは独立運営のサービスで、Setlogの公式・公認サービスではありません。</span></footer>
 
       {safetyOpen && (
         <div className="modal-backdrop" role="presentation" onClick={() => setSafetyOpen(false)}>

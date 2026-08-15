@@ -1,11 +1,12 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import type { getDb } from "../db";
 import { eventRegistrations, events } from "../db/schema";
-import type { RegistrationProfile } from "./profile";
+import { currentWeeklyEventSchedule, NEXT_EVENT_ALIAS, scheduleForEventKey, timingForEvent } from "./event-schedule";
+import type { RegistrationPreferences, RegistrationProfile } from "./profile";
 
 type Database = ReturnType<typeof getDb>;
 
-export const NEXT_EVENT_KEY = "next-saturday";
+export const NEXT_EVENT_KEY = NEXT_EVENT_ALIAS;
 export const INITIAL_EVENT_CAPACITY = 100;
 
 export type RegistrationReservation = {
@@ -14,33 +15,74 @@ export type RegistrationReservation = {
   capacity: number;
 };
 
-function nextSaturdayAtNoonJst() {
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const daysUntilSaturday = (6 - today.getUTCDay() + 7) % 7 || 7;
-  today.setUTCDate(today.getUTCDate() + daysUntilSaturday);
-  today.setUTCHours(3, 0, 0, 0);
-  return today;
-}
-
-export async function ensureEvent(db: Database, eventKey: string) {
-  const existing = await db.query.events.findFirst({ where: eq(events.eventKey, eventKey) });
+export async function ensureEvent(db: Database, eventKey: string, now = new Date()) {
+  const schedule = scheduleForEventKey(eventKey, now);
+  const existing = await db.query.events.findFirst({ where: eq(events.eventKey, schedule.eventKey) });
   if (existing) return existing;
+  if (eventKey !== NEXT_EVENT_ALIAS && schedule.eventKey !== currentWeeklyEventSchedule(now).eventKey) {
+    throw new Error("EVENT_NOT_FOUND");
+  }
 
   await db
     .insert(events)
     .values({
-      eventKey,
-      startsAt: nextSaturdayAtNoonJst(),
+      eventKey: schedule.eventKey,
+      startsAt: schedule.startsAt,
       status: "open",
       capacity: INITIAL_EVENT_CAPACITY,
       waitingCount: 0,
     })
     .onConflictDoNothing({ target: events.eventKey });
 
-  const created = await db.query.events.findFirst({ where: eq(events.eventKey, eventKey) });
+  const created = await db.query.events.findFirst({ where: eq(events.eventKey, schedule.eventKey) });
   if (!created) throw new Error("Event could not be created.");
   return created;
+}
+
+export function eventState(event: typeof events.$inferSelect, now = new Date()) {
+  const timing = timingForEvent(event.startsAt, now);
+  return {
+    eventKey: event.eventKey,
+    ...timing,
+    registrationOpen: event.status === "open" && timing.registrationOpen,
+    canCancel: event.status === "open" && timing.canCancel,
+  };
+}
+
+export async function cancelEventRegistration(db: Database, eventId: string, userId: string) {
+  const rows = await db.execute(sql`
+    WITH cancelled AS (
+      UPDATE event_registrations
+      SET status = 'cancelled', updated_at = now()
+      WHERE event_id = ${eventId}::uuid
+        AND user_id = ${userId}::uuid
+        AND status = 'waiting'
+      RETURNING line_status
+    ), removed_pairs AS (
+      DELETE FROM event_pairs
+      WHERE event_id = ${eventId}::uuid
+        AND (${userId}::uuid = participant_a_id OR ${userId}::uuid = participant_b_id)
+        AND EXISTS (SELECT 1 FROM cancelled)
+      RETURNING id
+    ), adjusted AS (
+      UPDATE events
+      SET waiting_count = GREATEST(
+        0,
+        waiting_count - (
+          SELECT count(*)::integer
+          FROM cancelled
+          WHERE line_status = 'registered'
+        )
+      )
+      WHERE id = ${eventId}::uuid
+      RETURNING id
+    )
+    SELECT
+      EXISTS(SELECT 1 FROM cancelled) AS cancelled,
+      (SELECT count(*)::integer FROM removed_pairs) AS "removedPairs"
+  `);
+  const [result] = rows as unknown as Array<{ cancelled: boolean; removedPairs: number }>;
+  return Boolean(result?.cancelled);
 }
 
 export async function reserveEventRegistration(
@@ -49,6 +91,7 @@ export async function reserveEventRegistration(
   sessionId: string,
   userId: string,
   profile: RegistrationProfile,
+  preferences: RegistrationPreferences,
 ): Promise<RegistrationReservation> {
   const rows = await db.execute(sql`
     SELECT registered, waiting_count AS "waitingCount", capacity
@@ -59,7 +102,9 @@ export async function reserveEventRegistration(
       ${profile.nickname},
       ${profile.faculty},
       ${profile.academicYear},
-      ${profile.gender}
+      ${profile.gender},
+      ${preferences.purpose}::match_purpose,
+      ${preferences.preferredGender}::gender_preference
     )
   `);
   const [result] = rows as unknown as Array<{
@@ -83,6 +128,7 @@ export async function recordLocalTestRegistration(
   sessionId: string,
   userId: string | null,
   profile: RegistrationProfile,
+  preferences: RegistrationPreferences,
 ): Promise<RegistrationReservation> {
   const existing = await db.query.eventRegistrations.findFirst({
     where: and(
@@ -100,6 +146,8 @@ export async function recordLocalTestRegistration(
         faculty: profile.faculty,
         academicYear: profile.academicYear,
         gender: profile.gender,
+        purpose: preferences.purpose,
+        preferredGender: preferences.preferredGender,
         updatedAt: new Date(),
       })
       .where(eq(eventRegistrations.id, existing.id));
@@ -116,6 +164,8 @@ export async function recordLocalTestRegistration(
         faculty: profile.faculty,
         academicYear: profile.academicYear,
         gender: profile.gender,
+        purpose: preferences.purpose,
+        preferredGender: preferences.preferredGender,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -128,6 +178,8 @@ export async function recordLocalTestRegistration(
           faculty: profile.faculty,
           academicYear: profile.academicYear,
           gender: profile.gender,
+          purpose: preferences.purpose,
+          preferredGender: preferences.preferredGender,
           updatedAt: new Date(),
         },
       });

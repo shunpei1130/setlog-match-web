@@ -1,8 +1,12 @@
 export const PROFILE_YEARS = ["1年", "2年", "3年", "4年", "修士1年", "修士2年", "その他"] as const;
 export const PROFILE_GENDERS = ["male", "female", "other"] as const;
+export const MATCH_PURPOSES = ["friend", "romance", "either"] as const;
+export const GENDER_PREFERENCES = ["any", "male", "female", "other"] as const;
 
 export type ProfileYear = (typeof PROFILE_YEARS)[number];
 export type ProfileGender = (typeof PROFILE_GENDERS)[number];
+export type MatchPurpose = (typeof MATCH_PURPOSES)[number];
+export type GenderPreference = (typeof GENDER_PREFERENCES)[number];
 
 export type RegistrationProfile = {
   nickname: string;
@@ -19,6 +23,13 @@ export type ContactHandles = {
 };
 
 export type ContactField = keyof ContactHandles;
+
+export type RegistrationPreferences = {
+  purpose: MatchPurpose;
+  preferredGender: GenderPreference;
+};
+
+export type PreferenceField = keyof RegistrationPreferences;
 
 export function validateRegistrationProfile(input: unknown): {
   profile: RegistrationProfile | null;
@@ -60,6 +71,46 @@ export function validateRegistrationProfile(input: unknown): {
     missing,
     invalid,
   };
+}
+
+export function validateRegistrationPreferences(input: unknown): {
+  preferences: RegistrationPreferences | null;
+  missing: PreferenceField[];
+  invalid: PreferenceField[];
+} {
+  if (!input || typeof input !== "object") {
+    return { preferences: null, missing: ["purpose", "preferredGender"], invalid: [] };
+  }
+  const candidate = input as Partial<Record<PreferenceField, unknown>>;
+  const purpose = typeof candidate.purpose === "string" ? candidate.purpose : "";
+  const preferredGender = typeof candidate.preferredGender === "string" ? candidate.preferredGender : "";
+  const missing: PreferenceField[] = [];
+  const invalid: PreferenceField[] = [];
+  if (!purpose) missing.push("purpose");
+  else if (!(MATCH_PURPOSES as readonly string[]).includes(purpose)) invalid.push("purpose");
+  if (!preferredGender) missing.push("preferredGender");
+  else if (!(GENDER_PREFERENCES as readonly string[]).includes(preferredGender)) invalid.push("preferredGender");
+  if (missing.length > 0 || invalid.length > 0) return { preferences: null, missing, invalid };
+  return {
+    preferences: {
+      purpose: purpose as MatchPurpose,
+      preferredGender: preferredGender as GenderPreference,
+    },
+    missing,
+    invalid,
+  };
+}
+
+export function arePairPreferencesCompatible(
+  left: Pick<RegistrationProfile, "gender"> & RegistrationPreferences,
+  right: Pick<RegistrationProfile, "gender"> & RegistrationPreferences,
+) {
+  const purposeCompatible = left.purpose === "either"
+    || right.purpose === "either"
+    || left.purpose === right.purpose;
+  const leftGenderCompatible = left.preferredGender === "any" || left.preferredGender === right.gender;
+  const rightGenderCompatible = right.preferredGender === "any" || right.preferredGender === left.gender;
+  return purposeCompatible && leftGenderCompatible && rightGenderCompatible;
 }
 
 export function validateContactHandles(input: unknown): {

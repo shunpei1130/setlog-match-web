@@ -22,6 +22,8 @@ type Draft = {
   faculty: string;
   academicYear: string;
   gender: string;
+  purpose: string;
+  preferredGender: string;
   ageConfirmed: boolean;
   rulesAccepted: boolean;
 };
@@ -31,12 +33,25 @@ const emptyDraft: Draft = {
   faculty: "",
   academicYear: "",
   gender: "",
+  purpose: "",
+  preferredGender: "any",
   ageConfirmed: false,
   rulesAccepted: false,
 };
 
 const years = ["1年", "2年", "3年", "4年", "修士1年", "修士2年", "その他"].map((value) => ({ value, label: value }));
 const genders = [
+  { value: "male", label: "男性" },
+  { value: "female", label: "女性" },
+  { value: "other", label: "その他" },
+] as const;
+const purposes = [
+  { value: "friend", label: "友人" },
+  { value: "romance", label: "恋愛" },
+  { value: "either", label: "どちらでも" },
+] as const;
+const preferredGenders = [
+  { value: "any", label: "問わない" },
   { value: "male", label: "男性" },
   { value: "female", label: "女性" },
   { value: "other", label: "その他" },
@@ -86,8 +101,8 @@ export function RegistrationScreen({
     const nickname = draft.nickname.trim();
     const faculty = draft.faculty.trim();
     const instagram = instagramHandle.trim().replace(/^@/, "");
-    if (!nickname || !faculty || !draft.academicYear || !draft.gender) {
-      setError("ニックネーム、学部、学年、性別をすべて入力してください。");
+    if (!nickname || !faculty || !draft.academicYear || !draft.gender || !draft.purpose || !draft.preferredGender) {
+      setError("プロフィール、利用目的、希望する相手をすべて入力してください。");
       return;
     }
     if (nickname.length > 20 || faculty.length > 40) {
@@ -117,6 +132,10 @@ export function RegistrationScreen({
         academicYear: draft.academicYear,
         gender: draft.gender,
       },
+      preferences: {
+        purpose: draft.purpose as RegistrationInput["preferences"]["purpose"],
+        preferredGender: draft.preferredGender as RegistrationInput["preferences"]["preferredGender"],
+      },
       contacts: {
         instagramHandle: instagram || null,
         lineContact: lineContact.trim() || null,
@@ -145,6 +164,9 @@ export function RegistrationScreen({
         <Field label="学部（必須）" value={draft.faculty} maxLength={40} placeholder="例：経済学部" onChangeText={(value) => update("faculty", value)} />
         <OptionGrid label="学年（必須）" options={years} value={draft.academicYear} onChange={(value) => update("academicYear", value)} />
         <OptionGrid label="性別（必須）" options={genders} value={draft.gender} onChange={(value) => update("gender", value)} />
+        <OptionGrid label="利用目的（必須）" options={purposes} value={draft.purpose} onChange={(value) => update("purpose", value)} />
+        <OptionGrid label="希望する相手（必須）" options={preferredGenders} value={draft.preferredGender} onChange={(value) => update("preferredGender", value)} />
+        <Text style={styles.sectionCopy}>目的と相手の希望が双方で一致する組み合わせだけを運営が作成します。</Text>
       </Card>
 
       <Card>

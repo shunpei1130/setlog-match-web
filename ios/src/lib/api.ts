@@ -63,8 +63,8 @@ export const mobileApi = {
     return apiRequest<LineStatus>("/api/line/status", {}, token);
   },
 
-  event(token: string) {
-    return apiRequest<EventState>(`/api/events/${EVENT_KEY}/registrations`, {}, token);
+  event(token: string, eventKey = EVENT_KEY) {
+    return apiRequest<EventState>(`/api/events/${encodeURIComponent(eventKey)}/registrations`, {}, token);
   },
 
   register(token: string, input: RegistrationInput) {
@@ -74,9 +74,17 @@ export const mobileApi = {
     }, token);
   },
 
-  async pair(token: string) {
+  cancelRegistration(token: string, eventKey: string) {
+    return apiRequest<EventState & { cancelled: boolean }>(
+      `/api/events/${encodeURIComponent(eventKey)}/registrations`,
+      { method: "DELETE" },
+      token,
+    );
+  },
+
+  async pair(token: string, eventKey = EVENT_KEY) {
     try {
-      const payload = await apiRequest<{ pair: RemotePair }>(`/api/events/${EVENT_KEY}/pair`, {}, token);
+      const payload = await apiRequest<{ pair: RemotePair }>(`/api/events/${encodeURIComponent(eventKey)}/pair`, {}, token);
       return payload.pair;
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;

@@ -75,6 +75,54 @@ test("registration GET restores the participant state", async () => {
   assert.match(registration, /remaining: Math\.max/);
 });
 
+test("weekly events expose cancellation and enforce the private decision window", async () => {
+  const [schedule, registration, pair, decision, eventMigration, registrationMigration, cron] = await Promise.all([
+    source("../lib/event-schedule.ts"),
+    source("../app/api/events/[eventKey]/registrations/route.ts"),
+    source("../lib/pair.ts"),
+    source("../app/api/pairs/[pairId]/decision/route.ts"),
+    source("../drizzle/0006_weekly_event_controls.sql"),
+    source("../drizzle/0007_fast_praxagora.sql"),
+    source("../app/api/cron/line-reminder/route.ts"),
+  ]);
+
+  assert.match(schedule, /sat-\$\{year\}-/);
+  assert.match(schedule, /DECISION_DELAY_MS = 10 \* 60 \* 60 \* 1000/);
+  assert.match(registration, /export async function DELETE/);
+  assert.match(registration, /REGISTRATION_CANCELLATION_CLOSED/);
+  assert.match(registration, /EVENT_REGISTRATION_CLOSED/);
+  assert.match(pair, /decisionOpen/);
+  assert.match(decision, /DECISION_NOT_OPEN/);
+  assert.match(eventMigration, /WHERE "event_key" = 'next-saturday'/);
+  assert.match(registrationMigration, /existing_id IS NOT NULL/);
+  assert.match(registrationMigration, /"status" = ''waiting''/);
+  assert.doesNotMatch(cron, /event_key = 'next-saturday'/);
+  assert.match(cron, /e\.starts_at <= now\(\) \+ interval '18 hours'/);
+});
+
+test("attribution, mutual preferences, and report workflow are server enforced", async () => {
+  const [schema, analytics, visit, registration, createPair, updatePair, metrics, reportStatus] = await Promise.all([
+    source("../db/schema.ts"),
+    source("../lib/analytics.ts"),
+    source("../app/api/analytics/visit/route.ts"),
+    source("../app/api/events/[eventKey]/registrations/route.ts"),
+    source("../app/api/admin/events/[eventKey]/pairs/route.ts"),
+    source("../app/api/admin/pairs/[pairId]/route.ts"),
+    source("../app/api/admin/metrics/route.ts"),
+    source("../app/api/admin/reports/[reportId]/route.ts"),
+  ]);
+  assert.match(schema, /funnelEvents/);
+  assert.match(schema, /preferredGender/);
+  assert.match(analytics, /HttpOnly/);
+  assert.match(visit, /qualified_visit/);
+  assert.match(registration, /PREFERENCES_REQUIRED/);
+  assert.match(createPair, /PAIR_PREFERENCES_MISMATCH/);
+  assert.match(updatePair, /PAIR_PREFERENCES_MISMATCH/);
+  assert.match(metrics, /registrationsCompleted/);
+  assert.match(reportStatus, /reviewedAt/);
+  assert.match(reportStatus, /resolvedAt/);
+});
+
 test("block and report stay participant-authenticated safety actions", async () => {
   const [blockRoute, reportRoute] = await Promise.all([
     source("../app/api/pairs/[pairId]/block/route.ts"),

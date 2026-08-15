@@ -16,7 +16,7 @@ describe("参加登録", () => {
     );
 
     await fireEvent.press(screen.getByText("参加登録を完了する →"));
-    expect(await screen.findByText(/ニックネーム、学部、学年、性別/)).toBeTruthy();
+    expect(await screen.findByText(/プロフィール、利用目的、希望する相手/)).toBeTruthy();
     expect(onRegister).not.toHaveBeenCalled();
   });
 });

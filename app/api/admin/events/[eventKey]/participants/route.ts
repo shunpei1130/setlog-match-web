@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../../../db";
 import { getCurrentAuthUser, isAdminEmail } from "../../../../../../lib/auth";
+import { ensureEvent } from "../../../../../../lib/event-registration";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,9 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "ADMIN_REQUIRED" }, { status: 403 });
   const { eventKey } = await params;
   try {
-    const rows = await getDb().execute(sql`
+    const db = getDb();
+    const event = await ensureEvent(db, eventKey);
+    const rows = await db.execute(sql`
       SELECT
         r.user_id AS "userId",
         u.email,
@@ -26,6 +29,8 @@ export async function GET(
         r.faculty,
         r.academic_year AS "academicYear",
         r.gender,
+        r.purpose,
+        r.preferred_gender AS "preferredGender",
         r.status,
         r.line_status AS "lineStatus",
         u.line_followed AS "lineFollowed",
@@ -35,10 +40,10 @@ export async function GET(
       FROM event_registrations r
       JOIN events e ON e.id = r.event_id
       LEFT JOIN users u ON u.id = r.user_id
-      WHERE e.event_key = ${eventKey}
+      WHERE e.event_key = ${event.eventKey}
       ORDER BY r.created_at ASC
     `);
-    return NextResponse.json({ participants: rows });
+    return NextResponse.json({ eventKey: event.eventKey, participants: rows });
   } catch {
     return NextResponse.json({ error: "ADMIN_DATA_UNAVAILABLE" }, { status: 503 });
   }

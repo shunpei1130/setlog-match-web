@@ -670,8 +670,10 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
   background: var(--paper);
   box-shadow: 4px 4px 0 var(--ink);
 }
-.utility-menu button {
+.utility-menu button, .utility-menu a {
   min-height: 42px;
+  display: flex;
+  align-items: center;
   padding: 8px 10px;
   border: 0;
   background: transparent;
@@ -679,8 +681,29 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
   text-align: left;
   font-size: 12px;
   font-weight: 800;
+  text-decoration: none;
 }
-.utility-menu button:hover, .utility-menu button:focus-visible { background: var(--accent); outline: 0; }
+.utility-menu button:hover, .utility-menu button:focus-visible, .utility-menu a:hover, .utility-menu a:focus-visible { background: var(--accent); outline: 0; }
+.app-footer nav { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.app-footer a { color: inherit; text-underline-offset: 3px; }
+.legal-page { min-height: 100svh; padding-bottom: 56px; }
+.legal-header { width: min(calc(100% - 32px), 680px); margin: 0 auto; padding: 16px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--ink); }
+.legal-header .secondary-button { min-height: 44px; }
+.legal-content { width: min(calc(100% - 32px), 680px); margin: 0 auto; padding: 48px 0; }
+.legal-content h1 { font-size: clamp(40px, 11vw, 60px); }
+.legal-lead { max-width: 560px; margin-top: 18px; color: var(--ink-soft); font-size: 15px; line-height: 1.75; }
+.legal-updated { margin: 16px 0 32px; color: var(--ink-soft); font-size: 11px; }
+.legal-section { padding: 24px 0; border-top: 1px solid var(--line); }
+.legal-section h2 { margin-bottom: 14px; font-size: 24px; letter-spacing: -0.04em; }
+.legal-section p, .legal-section li { font-size: 14px; line-height: 1.8; }
+.legal-section ul { margin: 0; padding-left: 20px; }
+.legal-section a:not(.primary-button) { color: var(--ink); font-weight: 700; text-underline-offset: 3px; }
+.legal-contact { display: grid; gap: 5px; margin-top: 24px; padding: 18px; border: 2px solid var(--ink); background: var(--surface-muted); box-shadow: 4px 4px 0 var(--ink); font-size: 13px; }
+.legal-contact a { color: var(--ink); overflow-wrap: anywhere; }
+.danger-zone { display: grid; gap: 12px; }
+.danger-zone label { font-size: 12px; font-weight: 800; }
+.danger-zone input { min-height: 48px; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 0; background: var(--surface); }
+.danger-zone .danger-button { justify-self: start; }
 .local-test-note {
   display: flex;
   align-items: flex-start;
@@ -1084,8 +1107,16 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
   grid-column: 1 / -1;
   margin: 0;
 }
+.admin-metric-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.admin-metric-summary > div { display: grid; gap: 3px; padding: 12px; border: 2px solid var(--ink); background: var(--surface-muted); }
+.admin-metric-summary strong { font-size: 24px; }
+.admin-metric-summary span { font-size: 10px; font-weight: 800; }
+.admin-report label { grid-column: 1 / -1; font-size: 11px; font-weight: 800; }
+.admin-report textarea { grid-column: 1 / -1; min-height: 84px; padding: 10px; border: 2px solid var(--ink); background: var(--surface); resize: vertical; }
+.admin-report__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 720px) {
+  .admin-metric-summary { grid-template-columns: repeat(2, 1fr); }
   .admin-grid {
     grid-template-columns: 1fr;
   }

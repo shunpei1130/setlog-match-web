@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getDb } from "../../../../db";
+import { readVisitorId, recordFunnelEvent } from "../../../../lib/analytics";
 import { setAuthCookie } from "../../../../lib/auth";
 import { verifyAuthenticationCode } from "../../../../lib/auth-verification";
 
@@ -9,6 +11,11 @@ export async function POST(request: Request) {
   try {
     const result = await verifyAuthenticationCode(body?.email, body?.code);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    await recordFunnelEvent(getDb(), request, "email_verified", {
+      userId: result.user.id,
+      visitorId: readVisitorId(request) ?? result.user.id,
+      dedupeKey: `email_verified:${result.user.id}`,
+    });
     const response = NextResponse.json({
       authenticated: true,
       user: result.user,

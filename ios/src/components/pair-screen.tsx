@@ -66,7 +66,9 @@ export function PairScreen({
           <Text style={styles.nextTitle}>夜に非公開判定</Text>
           <Text style={styles.nextCopy}>Instagram、LINE、もう一日、何も教えない。回答内容は相手に表示されません。</Text>
         </Card>
-        <ActionButton onPress={onDecision}>夜の判定へ進む →</ActionButton>
+        <ActionButton disabled={!pair.decisionOpen} onPress={onDecision}>
+          {pair.decisionOpen ? "夜の判定へ進む →" : "22時から回答できます"}
+        </ActionButton>
         <ActionButton variant="secondary" onPress={onCloseSetlog}>Day Pairへ戻る</ActionButton>
         <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったとき・安全メニュー</ActionButton>
         <SafetyModal visible={safetyOpen} busy={busy} onClose={() => setSafetyOpen(false)} onBlock={onBlock} onReport={onReport} />

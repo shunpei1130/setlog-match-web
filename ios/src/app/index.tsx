@@ -34,7 +34,12 @@ export default function HomeScreen() {
         />
       ) : null}
       {app.phase === "waiting" && app.event ? (
-        <WaitingScreen event={app.event} busy={app.busy} onStart={app.startMatching} />
+        <WaitingScreen
+          event={app.event}
+          busy={app.busy}
+          onStart={app.startMatching}
+          onCancel={app.cancelRegistration}
+        />
       ) : null}
       {app.phase === "pair" && app.pair ? (
         <PairScreen

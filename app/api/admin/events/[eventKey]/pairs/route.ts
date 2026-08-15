@@ -1,8 +1,10 @@
 import { and, eq, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../../../db";
-import { eventPairs, eventRegistrations, events } from "../../../../../../db/schema";
+import { eventPairs, eventRegistrations } from "../../../../../../db/schema";
 import { getCurrentAuthUser, isAdminEmail } from "../../../../../../lib/auth";
+import { ensureEvent } from "../../../../../../lib/event-registration";
+import { arePairPreferencesCompatible, type GenderPreference, type MatchPurpose, type ProfileGender } from "../../../../../../lib/profile";
 
 export const runtime = "nodejs";
 
@@ -35,7 +37,9 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "ADMIN_REQUIRED" }, { status: 403 });
   const { eventKey } = await params;
   try {
-    const rows = await getDb().execute(sql`
+    const db = getDb();
+    const event = await ensureEvent(db, eventKey);
+    const rows = await db.execute(sql`
       SELECT
         p.id,
         p.status,
@@ -49,10 +53,10 @@ export async function GET(
       JOIN events e ON e.id = p.event_id
       JOIN users ua ON ua.id = p.participant_a_id
       JOIN users ub ON ub.id = p.participant_b_id
-      WHERE e.event_key = ${eventKey}
+      WHERE e.event_key = ${event.eventKey}
       ORDER BY p.created_at ASC
     `);
-    return NextResponse.json({ pairs: rows });
+    return NextResponse.json({ eventKey: event.eventKey, pairs: rows });
   } catch {
     return NextResponse.json({ error: "ADMIN_DATA_UNAVAILABLE" }, { status: 503 });
   }
@@ -83,20 +87,38 @@ export async function POST(
 
   try {
     const db = getDb();
-    const event = await db.query.events.findFirst({ where: eq(events.eventKey, eventKey) });
-    if (!event) return NextResponse.json({ error: "EVENT_NOT_FOUND" }, { status: 404 });
-    const registrations = await db.select({ userId: eventRegistrations.userId })
+    const event = await ensureEvent(db, eventKey);
+    const registrations = await db.select({
+      userId: eventRegistrations.userId,
+      gender: eventRegistrations.gender,
+      purpose: eventRegistrations.purpose,
+      preferredGender: eventRegistrations.preferredGender,
+    })
       .from(eventRegistrations)
       .where(and(
         eq(eventRegistrations.eventId, event.id),
         eq(eventRegistrations.status, "waiting"),
+        eq(eventRegistrations.lineStatus, "registered"),
       ));
     const registeredIds = new Set(registrations.map((registration) => registration.userId).filter(Boolean));
     if (!registeredIds.has(participantAId) || !registeredIds.has(participantBId)) {
       return NextResponse.json({ error: "PAIR_PARTICIPANT_NOT_REGISTERED" }, { status: 400 });
     }
+    const participantA = registrations.find((registration) => registration.userId === participantAId);
+    const participantB = registrations.find((registration) => registration.userId === participantBId);
+    if (!participantA?.gender || !participantB?.gender) {
+      return NextResponse.json({ error: "PAIR_PARTICIPANT_PROFILE_INCOMPLETE" }, { status: 400 });
+    }
+    const compatible = arePairPreferencesCompatible(
+      { gender: participantA.gender as ProfileGender, purpose: participantA.purpose as MatchPurpose, preferredGender: participantA.preferredGender as GenderPreference },
+      { gender: participantB.gender as ProfileGender, purpose: participantB.purpose as MatchPurpose, preferredGender: participantB.preferredGender as GenderPreference },
+    );
+    if (!compatible) {
+      return NextResponse.json({ error: "PAIR_PREFERENCES_MISMATCH" }, { status: 409 });
+    }
     const occupied = await db.select({ id: eventPairs.id }).from(eventPairs).where(and(
       eq(eventPairs.eventId, event.id),
+      or(eq(eventPairs.status, "draft"), eq(eventPairs.status, "published")),
       or(
         eq(eventPairs.participantAId, participantAId),
         eq(eventPairs.participantBId, participantAId),

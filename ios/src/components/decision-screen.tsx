@@ -56,6 +56,10 @@ export function DecisionScreen({
   };
 
   const submit = async () => {
+    if (!pair.decisionOpen) {
+      setError("非公開判定は土曜22時から回答できます。");
+      return;
+    }
     if (!hasDecision(decision)) {
       setError("いずれかを選ぶか、「何も教えない」を選択してください。");
       return;
@@ -114,7 +118,9 @@ export function DecisionScreen({
             <Text style={styles.privacyTitle}>非公開のまま判定します</Text>
             <Text style={styles.privacyCopy}>相手の回答、片方だけが希望した事実、不成立の理由は表示しません。</Text>
           </Card>
-          <ActionButton disabled={busy} onPress={() => void submit()}>{busy ? "送信中…" : "この内容で送信する →"}</ActionButton>
+          <ActionButton disabled={busy || !pair.decisionOpen} onPress={() => void submit()}>
+            {busy ? "送信中…" : pair.decisionOpen ? "この内容で送信する →" : "22時から回答できます"}
+          </ActionButton>
         </>
       )}
       <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったとき・安全メニュー</ActionButton>

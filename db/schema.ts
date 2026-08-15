@@ -17,6 +17,18 @@ export const lineStatus = pgEnum("line_status", ["not_registered", "registered"]
 export const pairStatus = pgEnum("pair_status", ["draft", "published", "closed", "blocked"]);
 export const safetyReportStatus = pgEnum("safety_report_status", ["open", "reviewed", "resolved"]);
 export const disclosureChannel = pgEnum("disclosure_channel", ["instagram", "line"]);
+export const matchPurpose = pgEnum("match_purpose", ["friend", "romance", "either"]);
+export const genderPreference = pgEnum("gender_preference", ["any", "male", "female", "other"]);
+export const funnelEventName = pgEnum("funnel_event_name", [
+  "qualified_visit",
+  "auth_code_requested",
+  "email_verified",
+  "line_linked",
+  "line_followed",
+  "registration_completed",
+  "event_activated",
+  "decision_submitted",
+]);
 
 export const users = pgTable(
   "users",
@@ -113,6 +125,8 @@ export const eventRegistrations = pgTable(
     faculty: text("faculty"),
     academicYear: text("academic_year"),
     gender: text("gender"),
+    purpose: matchPurpose("purpose").notNull().default("either"),
+    preferredGender: genderPreference("preferred_gender").notNull().default("any"),
     ageConfirmedAt: timestamp("age_confirmed_at", { withTimezone: true, mode: "date" }),
     rulesAcceptedAt: timestamp("rules_accepted_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
@@ -242,11 +256,38 @@ export const safetyReports = pgTable(
     reason: text("reason").notNull(),
     detail: text("detail"),
     status: safetyReportStatus("status").notNull().default("open"),
+    adminNote: text("admin_note"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "date" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => ({
     reportStatusIndex: index("safety_reports_status_created_idx").on(table.status, table.createdAt),
+  }),
+);
+
+export const funnelEvents = pgTable(
+  "funnel_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    visitorId: uuid("visitor_id").notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    eventName: funnelEventName("event_name").notNull(),
+    refCode: text("ref_code"),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    landingPath: text("landing_path"),
+    dedupeKey: text("dedupe_key").unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    visitorCreatedIndex: index("funnel_events_visitor_created_idx").on(table.visitorId, table.createdAt),
+    userCreatedIndex: index("funnel_events_user_created_idx").on(table.userId, table.createdAt),
+    eventCreatedIndex: index("funnel_events_name_created_idx").on(table.eventName, table.createdAt),
+    refCreatedIndex: index("funnel_events_ref_created_idx").on(table.refCode, table.createdAt),
   }),
 );
 
@@ -284,6 +325,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   blocksReceived: many(blocks, { relationName: "blocked" }),
   reports: many(safetyReports),
   reminderDeliveries: many(lineReminderDeliveries),
+  funnelEvents: many(funnelEvents),
 }));
 
 export const authSessionsRelations = relations(authSessions, ({ one }) => ({
@@ -340,4 +382,9 @@ export const safetyReportsRelations = relations(safetyReports, ({ one }) => ({
 export const lineReminderDeliveriesRelations = relations(lineReminderDeliveries, ({ one }) => ({
   event: one(events, { fields: [lineReminderDeliveries.eventId], references: [events.id] }),
   user: one(users, { fields: [lineReminderDeliveries.userId], references: [users.id] }),
+}));
+
+export const funnelEventsRelations = relations(funnelEvents, ({ one }) => ({
+  user: one(users, { fields: [funnelEvents.userId], references: [users.id] }),
+  event: one(events, { fields: [funnelEvents.eventId], references: [events.id] }),
 }));

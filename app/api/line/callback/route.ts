@@ -6,6 +6,7 @@ import { lineLoginStates, users } from "../../../../db/schema";
 import { getCurrentAuthUser } from "../../../../lib/auth";
 import { hashSecret, safeSecretEqual } from "../../../../lib/crypto";
 import { checkLineFriendship, exchangeLineCode, getLineProfile } from "../../../../lib/line";
+import { readVisitorId, recordFunnelEvent } from "../../../../lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -76,6 +77,17 @@ export async function GET(request: Request) {
         updatedAt: new Date(),
       })
       .where(eq(users.id, target.userId));
+    const visitorId = readVisitorId(request) ?? target.userId;
+    await recordFunnelEvent(db, request, "line_linked", {
+      userId: target.userId,
+      visitorId,
+      dedupeKey: `line_linked:${target.userId}`,
+    });
+    if (followed) await recordFunnelEvent(db, request, "line_followed", {
+      userId: target.userId,
+      visitorId,
+      dedupeKey: `line_followed:${target.userId}`,
+    });
     const response = redirectFor(request, target.kind, followed ? "linked" : "linked-not-following");
     if (target.kind === "web") {
       response.headers.append("Set-Cookie", "setlog_line_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax;");

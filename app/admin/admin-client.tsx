@@ -10,12 +10,19 @@ type Participant = {
   faculty: string | null;
   academicYear: string | null;
   gender: string | null;
+  purpose: "friend" | "romance" | "either";
+  preferredGender: "any" | "male" | "female" | "other";
   status: string;
   lineStatus: string;
   lineFollowed: boolean | null;
   instagramHandle: string | null;
   lineContact: string | null;
   createdAt: string;
+};
+
+type Metrics = {
+  totals: Record<string, number>;
+  sources: Array<Record<string, string | number>>;
 };
 
 type Pair = {
@@ -43,6 +50,7 @@ type Report = {
   reason: string;
   detail: string | null;
   status: string;
+  adminNote: string | null;
   createdAt: string;
 };
 
@@ -52,6 +60,8 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [metrics, setMetrics] = useState<Metrics>({ totals: {}, sources: [] });
+  const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
   const [participantAId, setParticipantAId] = useState("");
   const [participantBId, setParticipantBId] = useState("");
   const [setlogUrl, setSetlogUrl] = useState("");
@@ -63,12 +73,13 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
   const load = async () => {
     setLoading(true);
     try {
-      const [participantResponse, pairResponse, reportResponse] = await Promise.all([
+      const [participantResponse, pairResponse, reportResponse, metricResponse] = await Promise.all([
         fetch(`/api/admin/events/${EVENT_KEY}/participants`, { cache: "no-store" }),
         fetch(`/api/admin/events/${EVENT_KEY}/pairs`, { cache: "no-store" }),
         fetch("/api/admin/reports", { cache: "no-store" }),
+        fetch("/api/admin/metrics", { cache: "no-store" }),
       ]);
-      if (!participantResponse.ok || !pairResponse.ok || !reportResponse.ok) throw new Error("load");
+      if (!participantResponse.ok || !pairResponse.ok || !reportResponse.ok || !metricResponse.ok) throw new Error("load");
       setParticipants((await participantResponse.json()).participants ?? []);
       const loadedPairs = (await pairResponse.json()).pairs ?? [];
       setPairs(loadedPairs);
@@ -78,12 +89,25 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
         setlogUrl: pair.setlogUrl ?? "",
         setlogCode: pair.setlogCode ?? "",
       }])));
-      setReports((await reportResponse.json()).reports ?? []);
+      const loadedReports = (await reportResponse.json()).reports ?? [];
+      setReports(loadedReports);
+      setReportNotes(Object.fromEntries(loadedReports.map((report: Report) => [report.id, report.adminNote ?? ""])));
+      setMetrics(await metricResponse.json());
     } catch {
       setNotice("運営データを取得できませんでした。");
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateReport = async (reportId: string, status: "open" | "reviewed" | "resolved") => {
+    const response = await fetch(`/api/admin/reports/${reportId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, adminNote: reportNotes[reportId] ?? "" }),
+    });
+    setNotice(response.ok ? "通報の対応状況を更新しました。" : "通報の対応状況を更新できませんでした。");
+    if (response.ok) await load();
   };
 
   useEffect(() => {
@@ -121,7 +145,8 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
       body: JSON.stringify({ participantAId, participantBId, setlogUrl, setlogCode }),
     });
     if (!response.ok) {
-      setNotice("ペアを作成できませんでした。参加者と入力内容を確認してください。");
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      setNotice(payload?.error === "PAIR_PREFERENCES_MISMATCH" ? "利用目的または希望する相手が一致しないため、このペアは作成できません。" : "ペアを作成できませんでした。参加者と入力内容を確認してください。");
       return;
     }
     setParticipantAId("");
@@ -163,7 +188,7 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
       <section className="admin-grid">
         <div className="admin-card">
           <div className="admin-card__heading"><div><span className="label">参加者</span><h2>登録一覧</h2></div><button className="secondary-button" type="button" onClick={() => void load()} disabled={loading}>更新</button></div>
-          {loading ? <p>読み込み中…</p> : <div className="admin-table-wrap"><table className="admin-table"><caption className="sr-only">次回土曜の参加者</caption><thead><tr><th>名前</th><th>所属</th><th>LINE</th><th>連絡先</th></tr></thead><tbody>{participants.map((participant) => <tr key={participant.userId ?? participant.email}><td><strong>{participant.nickname ?? "未入力"}</strong><small>{participant.email ?? "未認証"}</small></td><td>{participant.faculty ?? "—"}<br />{participant.academicYear ?? "—"} / {participant.gender ?? "—"}</td><td>{participant.lineFollowed ? "友だち追加済み" : "未確認"}</td><td><small>IG: {participant.instagramHandle ?? "—"}<br />LINE: {participant.lineContact ?? "—"}</small></td></tr>)}</tbody></table></div>}
+          {loading ? <p>読み込み中…</p> : <div className="admin-table-wrap"><table className="admin-table"><caption className="sr-only">次回土曜の参加者</caption><thead><tr><th>名前</th><th>所属</th><th>希望</th><th>LINE</th><th>連絡先</th></tr></thead><tbody>{participants.map((participant) => <tr key={participant.userId ?? participant.email}><td><strong>{participant.nickname ?? "未入力"}</strong><small>{participant.email ?? "未認証"}</small></td><td>{participant.faculty ?? "—"}<br />{participant.academicYear ?? "—"} / {participant.gender ?? "—"}</td><td><small>{participant.purpose === "friend" ? "友人" : participant.purpose === "romance" ? "恋愛" : "どちらでも"}<br />相手：{participant.preferredGender === "any" ? "問わない" : participant.preferredGender}</small></td><td>{participant.lineFollowed ? "友だち追加済み" : "未確認"}</td><td><small>IG: {participant.instagramHandle ?? "—"}<br />LINE: {participant.lineContact ?? "—"}</small></td></tr>)}</tbody></table></div>}
         </div>
 
         <form className="admin-card admin-form" onSubmit={createPair}>
@@ -219,8 +244,14 @@ export default function AdminClient({ adminEmail }: { adminEmail: string }) {
       </section>
 
       <section className="admin-card">
+        <div className="admin-card__heading"><div><span className="label">直近90日</span><h2>登録ファネル</h2></div></div>
+        <div className="admin-metric-summary"><div><strong>{metrics.totals.qualifiedVisits ?? 0}</strong><span>訪問</span></div><div><strong>{metrics.totals.emailVerified ?? 0}</strong><span>認証完了</span></div><div><strong>{metrics.totals.lineFollowed ?? 0}</strong><span>LINE追加</span></div><div><strong>{metrics.totals.registrationsCompleted ?? 0}</strong><span>登録完了</span></div></div>
+        <div className="admin-table-wrap"><table className="admin-table"><caption className="sr-only">紹介元別の登録ファネル</caption><thead><tr><th>紹介元</th><th>訪問</th><th>コード</th><th>認証</th><th>LINE</th><th>登録</th></tr></thead><tbody>{metrics.sources.length === 0 ? <tr><td colSpan={6}>まだ計測データがありません。</td></tr> : metrics.sources.map((source) => <tr key={`${source.refCode}-${source.utmSource}-${source.utmCampaign}`}><td><strong>{source.refCode}</strong><small>{source.utmSource || "direct"} / {source.utmCampaign || "—"}</small></td><td>{source.qualifiedVisits}</td><td>{source.authCodeRequests}</td><td>{source.emailVerified}</td><td>{source.lineFollowed}</td><td>{source.registrationsCompleted}</td></tr>)}</tbody></table></div>
+      </section>
+
+      <section className="admin-card">
         <div className="admin-card__heading"><div><span className="label">Safety</span><h2>通報</h2></div></div>
-        {reports.length === 0 ? <p>未処理の通報はありません。</p> : <div className="admin-report-list">{reports.map((report) => <article className="admin-report" key={report.id}><strong>{report.reason}</strong><span>{report.status}</span><p>{report.detail ?? "詳細なし"}</p><small>{new Date(report.createdAt).toLocaleString("ja-JP")}</small></article>)}</div>}
+        {reports.length === 0 ? <p>通報はありません。</p> : <div className="admin-report-list">{reports.map((report) => <article className="admin-report" key={report.id}><strong>{report.reason}</strong><span>{report.status}</span><p>{report.detail ?? "詳細なし"}</p><small>{new Date(report.createdAt).toLocaleString("ja-JP")}</small><label htmlFor={`report-${report.id}-note`}>運営メモ</label><textarea id={`report-${report.id}-note`} value={reportNotes[report.id] ?? ""} maxLength={1000} onChange={(event) => setReportNotes((previous) => ({ ...previous, [report.id]: event.target.value }))} /><div className="admin-report__actions"><button className="secondary-button" type="button" onClick={() => void updateReport(report.id, "reviewed")}>確認済み</button><button className="primary-button" type="button" onClick={() => void updateReport(report.id, "resolved")}>解決済み</button>{report.status !== "open" && <button className="text-button" type="button" onClick={() => void updateReport(report.id, "open")}>未対応へ戻す</button>}</div></article>)}</div>}
       </section>
     </main>
   );

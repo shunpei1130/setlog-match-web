@@ -20,7 +20,8 @@ export async function GET(request: Request) {
       JOIN event_registrations r ON r.event_id = e.id
       JOIN users u ON u.id = r.user_id
       LEFT JOIN line_reminder_deliveries d ON d.event_id = e.id AND d.user_id = r.user_id
-      WHERE e.event_key = 'next-saturday'
+      WHERE e.starts_at > now()
+        AND e.starts_at <= now() + interval '18 hours'
         AND r.status = 'waiting'
         AND r.line_status = 'registered'
         AND u.line_followed = true

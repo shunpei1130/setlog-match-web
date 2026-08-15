@@ -40,6 +40,7 @@ type AppContextValue = {
   verifyCode: (email: string, code: string) => Promise<void>;
   refresh: (silent?: boolean) => Promise<void>;
   register: (input: RegistrationInput) => Promise<boolean>;
+  cancelRegistration: () => Promise<void>;
   connectLine: () => Promise<void>;
   startMatching: () => Promise<void>;
   openSetlog: () => void;
@@ -66,6 +67,9 @@ function messageForError(error: unknown) {
     INSTAGRAM_CONTACT_REQUIRED: "Instagramを選ぶには、事前登録でユーザーネームを設定してください。",
     LINE_CONTACT_REQUIRED: "LINEを選ぶには、事前登録で連絡先を設定してください。",
     PAIR_NOT_PUBLISHED: "運営がペアを公開するまで、もう少しお待ちください。",
+    EVENT_REGISTRATION_CLOSED: "今回の参加登録は締め切りました。",
+    REGISTRATION_CANCELLATION_CLOSED: "開始時刻を過ぎたため、アプリからはキャンセルできません。",
+    DECISION_NOT_OPEN: "非公開判定は土曜22時から回答できます。",
   };
   return messages[error.code] ?? "処理を完了できませんでした。もう一度お試しください。";
 }
@@ -201,19 +205,37 @@ export function AppProvider({ children }: PropsWithChildren) {
     }
   }, [refresh]);
 
+  const cancelRegistration = useCallback(async () => {
+    const token = tokenRef.current;
+    if (!token || !event) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await mobileApi.cancelRegistration(token, event.eventKey);
+      await refresh(true);
+      setPhase("registration");
+      setNotice("今回の参加をキャンセルしました。開始前なら、もう一度登録できます。");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [clearSession, event, refresh]);
+
   const startMatching = useCallback(async () => {
     const token = tokenRef.current;
     if (!token) return;
     setBusy(true);
     setNotice(null);
     try {
-      const publishedPair = await mobileApi.pair(token);
+      const publishedPair = await mobileApi.pair(token, event?.eventKey);
       if (!publishedPair) {
         setNotice("運営がペアを公開するまで、もう少しお待ちください。");
         return;
       }
       setPair(publishedPair);
-      setPhase(phaseFor(event ?? { registration: null, count: 0, capacity: 100, remaining: 100, updatedAt: "" }, publishedPair));
+      setPhase(phaseFor(event, publishedPair));
     } catch (error) {
       setNotice(messageForError(error));
     } finally {
@@ -301,11 +323,18 @@ export function AppProvider({ children }: PropsWithChildren) {
     verifyCode,
     refresh,
     register,
+    cancelRegistration,
     connectLine,
     startMatching,
     openSetlog: () => setSetlogOpen(true),
     closeSetlog: () => setSetlogOpen(false),
-    openDecision: () => setPhase("decision"),
+    openDecision: () => {
+      if (!pair?.decisionOpen) {
+        setNotice("非公開判定は土曜22時から回答できます。");
+        return;
+      }
+      setPhase("decision");
+    },
     submitDecision,
     blockPair,
     reportPair,
@@ -314,6 +343,7 @@ export function AppProvider({ children }: PropsWithChildren) {
   }), [
     blockPair,
     busy,
+    cancelRegistration,
     connectLine,
     event,
     line,

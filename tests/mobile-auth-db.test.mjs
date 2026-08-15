@@ -14,6 +14,7 @@ const pepper = `db-test-${randomBytes(18).toString("hex")}`;
 const runId = `${Date.now()}-${randomBytes(5).toString("hex")}`;
 const email = `codex-mobile-db-${runId}@example.com`;
 const deliveryEmail = `codex-email-delivery-${runId}@example.com`;
+const partnerEmail = `codex-event-partner-${runId}@example.com`;
 const sql = neon(testDatabaseUrl);
 
 process.env.DATABASE_URL = testDatabaseUrl;
@@ -89,6 +90,7 @@ after(async () => {
   await sql`DELETE FROM authentication_codes WHERE email = ${deliveryEmail}`;
   await sql`DELETE FROM users WHERE email = ${email}`;
   await sql`DELETE FROM users WHERE email = ${deliveryEmail}`;
+  await sql`DELETE FROM users WHERE email = ${partnerEmail}`;
 });
 
 test("mobile auth works against an isolated Neon branch", async () => {
@@ -186,6 +188,81 @@ test("mobile auth works against an isolated Neon branch", async () => {
   `;
   const expiredState = await api(`/api/line/callback?state=${encodeURIComponent(expiringState)}&error=access_denied`);
   assert.equal(new URL(expiredState.headers.get("location")).searchParams.get("status"), "expired");
+
+  await sql`
+    UPDATE users
+    SET line_user_id = ${`line-${runId}`}, line_followed = true
+    WHERE id = ${verifiedBody.user.id}::uuid
+  `;
+  const registrationBody = JSON.stringify({
+    profile: { nickname: "テスト参加者", faculty: "経済学部", academicYear: "2年", gender: "other" },
+    preferences: { purpose: "either", preferredGender: "any" },
+    contacts: { instagramHandle: null, lineContact: null },
+    ageConfirmed: true,
+    rulesAccepted: true,
+  });
+  const registered = await api("/api/events/next-saturday/registrations", {
+    method: "POST",
+    headers: { ...bearer(lineToken), "content-type": "application/json" },
+    body: registrationBody,
+  });
+  assert.equal(registered.status, 200);
+  const registeredBody = await registered.json();
+  assert.match(registeredBody.eventKey, /^sat-\d{4}-\d{2}-\d{2}$/);
+  assert.equal(registeredBody.canCancel, true);
+
+  const cancelledRegistration = await api(`/api/events/${registeredBody.eventKey}/registrations`, {
+    method: "DELETE",
+    headers: bearer(lineToken),
+  });
+  assert.equal(cancelledRegistration.status, 200);
+  assert.equal((await cancelledRegistration.json()).cancelled, true);
+
+  const restoredCancellation = await api(`/api/events/${registeredBody.eventKey}/registrations`, {
+    headers: bearer(lineToken),
+  });
+  assert.equal((await restoredCancellation.json()).registration.status, "cancelled");
+
+  const reregistered = await api(`/api/events/${registeredBody.eventKey}/registrations`, {
+    method: "POST",
+    headers: { ...bearer(lineToken), "content-type": "application/json" },
+    body: registrationBody,
+  });
+  assert.equal(reregistered.status, 200);
+
+  const [partner] = await sql`
+    INSERT INTO users (email, email_verified_at, line_followed)
+    VALUES (${partnerEmail}, now(), true)
+    RETURNING id::text AS id
+  `;
+  const [event] = await sql`
+    SELECT id::text AS id
+    FROM events
+    WHERE event_key = ${registeredBody.eventKey}
+  `;
+  await sql`
+    INSERT INTO event_registrations (
+      event_id, user_id, session_id, status, line_status, nickname, faculty, academic_year, gender
+    )
+    VALUES (
+      ${event.id}::uuid, ${partner.id}::uuid, gen_random_uuid(), 'waiting', 'registered',
+      'テスト相手', '文学部', '3年', 'other'
+    )
+  `;
+  const [pair] = await sql`
+    INSERT INTO event_pairs (event_id, participant_a_id, participant_b_id, status, published_at)
+    VALUES (${event.id}::uuid, ${verifiedBody.user.id}::uuid, ${partner.id}::uuid, 'published', now())
+    RETURNING id::text AS id
+  `;
+  const earlyDecision = await api(`/api/pairs/${pair.id}/decision`, {
+    method: "POST",
+    headers: { ...bearer(lineToken), "content-type": "application/json" },
+    body: JSON.stringify({ none: true }),
+  });
+  assert.equal(earlyDecision.status, 409);
+  const earlyDecisionBody = await earlyDecision.json();
+  assert.equal(earlyDecisionBody.error, "DECISION_NOT_OPEN");
+  assert.match(earlyDecisionBody.decisionOpensAt, /T13:00:00\.000Z$/);
 });
 
 test("failed email delivery removes the generated OTP row", async () => {

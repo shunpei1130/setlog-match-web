@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../../db";
 import { users } from "../../../../db/schema";
 import { verifyLineWebhookSignature } from "../../../../lib/line";
+import { recordFunnelEvent } from "../../../../lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,12 @@ export async function POST(request: Request) {
       const lineUserId = event.source?.userId;
       if (!lineUserId) continue;
       if (event.type === "follow") {
-        await db.update(users).set({ lineFollowed: true, updatedAt: new Date() }).where(eq(users.lineUserId, lineUserId));
+        const [followedUser] = await db.update(users).set({ lineFollowed: true, updatedAt: new Date() }).where(eq(users.lineUserId, lineUserId)).returning({ id: users.id });
+        if (followedUser) await recordFunnelEvent(db, request, "line_followed", {
+          userId: followedUser.id,
+          visitorId: followedUser.id,
+          dedupeKey: `line_followed:${followedUser.id}`,
+        });
       } else if (event.type === "unfollow") {
         await db.update(users).set({ lineFollowed: false, updatedAt: new Date() }).where(eq(users.lineUserId, lineUserId));
       }

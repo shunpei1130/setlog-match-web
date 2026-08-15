@@ -1,6 +1,7 @@
 import { and, eq, or, sql } from "drizzle-orm";
 import type { getDb } from "../db";
 import { blocks, contactDisclosures, pairDecisions } from "../db/schema";
+import { timingForEvent } from "./event-schedule";
 
 type Database = ReturnType<typeof getDb>;
 
@@ -20,6 +21,9 @@ export type PairResult =
 export type PairView = {
   id: string;
   eventKey: string;
+  startsAt: string;
+  decisionOpensAt: string;
+  decisionOpen: boolean;
   status: "draft" | "published" | "closed" | "blocked";
   setlogUrl: string | null;
   setlogCode: string | null;
@@ -38,6 +42,7 @@ export type PairView = {
 type PairRow = {
   id: string;
   eventKey: string;
+  startsAt: Date | string;
   status: PairView["status"];
   setlogUrl: string | null;
   setlogCode: string | null;
@@ -137,6 +142,7 @@ function sqlPairRow(pairId: string) {
     SELECT
       p.id,
       e.event_key AS "eventKey",
+      e.starts_at AS "startsAt",
       p.status,
       p.setlog_url AS "setlogUrl",
       p.setlog_code AS "setlogCode",
@@ -193,9 +199,13 @@ export async function getPairViewForUser(db: Database, pairId: string, userId: s
     : ownDecision?.answered
       ? { kind: "pending", items: [], contacts: null }
       : null;
+  const timing = timingForEvent(new Date(row.startsAt));
   return {
     id: row.id,
     eventKey: row.eventKey,
+    startsAt: timing.startsAt,
+    decisionOpensAt: timing.decisionOpensAt,
+    decisionOpen: timing.decisionOpen,
     status: row.status,
     setlogUrl: row.setlogUrl,
     setlogCode: row.setlogCode,

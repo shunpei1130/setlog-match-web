@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../../../db";
 import { eventPairs, eventRegistrations } from "../../../../../db/schema";
 import { getCurrentAuthUser, isAdminEmail } from "../../../../../lib/auth";
+import { arePairPreferencesCompatible, type GenderPreference, type MatchPurpose, type ProfileGender } from "../../../../../lib/profile";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,12 @@ export async function PATCH(
       if (!participantAId || !participantBId || participantAId === participantBId) {
         return NextResponse.json({ error: "PAIR_PARTICIPANTS_INVALID" }, { status: 400 });
       }
-      const registrations = await db.select({ userId: eventRegistrations.userId })
+      const registrations = await db.select({
+        userId: eventRegistrations.userId,
+        gender: eventRegistrations.gender,
+        purpose: eventRegistrations.purpose,
+        preferredGender: eventRegistrations.preferredGender,
+      })
         .from(eventRegistrations)
         .where(and(
           eq(eventRegistrations.eventId, existing.eventId),
@@ -73,6 +79,17 @@ export async function PATCH(
       const registeredIds = new Set(registrations.map((registration) => registration.userId).filter(Boolean));
       if (!registeredIds.has(participantAId) || !registeredIds.has(participantBId)) {
         return NextResponse.json({ error: "PAIR_PARTICIPANT_NOT_REGISTERED" }, { status: 400 });
+      }
+      const participantA = registrations.find((registration) => registration.userId === participantAId);
+      const participantB = registrations.find((registration) => registration.userId === participantBId);
+      if (!participantA?.gender || !participantB?.gender) {
+        return NextResponse.json({ error: "PAIR_PARTICIPANT_PROFILE_INCOMPLETE" }, { status: 400 });
+      }
+      if (!arePairPreferencesCompatible(
+        { gender: participantA.gender as ProfileGender, purpose: participantA.purpose as MatchPurpose, preferredGender: participantA.preferredGender as GenderPreference },
+        { gender: participantB.gender as ProfileGender, purpose: participantB.purpose as MatchPurpose, preferredGender: participantB.preferredGender as GenderPreference },
+      )) {
+        return NextResponse.json({ error: "PAIR_PREFERENCES_MISMATCH" }, { status: 409 });
       }
       const occupied = await db.select({ id: eventPairs.id }).from(eventPairs).where(and(
         eq(eventPairs.eventId, existing.eventId),

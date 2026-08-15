@@ -32,6 +32,19 @@ test("server-renders the set-mob MVP", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
+test("publishes terms, privacy, safety, contact, and a protected deletion endpoint", async () => {
+  const pages = await Promise.all(["/terms", "/privacy", "/safety", "/contact"].map((path) => render(path)));
+  for (const response of pages) assert.equal(response.status, 200);
+  assert.match(await pages[0].text(), /利用規約/);
+  assert.match(await pages[1].text(), /プライバシーポリシー/);
+  assert.match(await pages[2].text(), /安全ガイド/);
+  assert.match(await pages[3].text(), /アカウントと登録データを削除/);
+
+  const deletion = await render("/api/me", { method: "DELETE" });
+  assert.equal(deletion.status, 401);
+  assert.deepEqual(await deletion.json(), { error: "AUTH_REQUIRED" });
+});
+
 test("does not report zero when the waiting-count database is unavailable", async () => {
   const response = await render("/api/events/next-saturday/waiting-count");
   assert.equal(response.status, 503);
@@ -48,6 +61,7 @@ test("requires an authenticated Aoyama account for registration", async () => {
       ageConfirmed: true,
       rulesAccepted: true,
       profile: validProfile(),
+      preferences: validPreferences(),
     }),
   });
   assert.equal(response.status, 401);
@@ -92,7 +106,7 @@ test("allows only the configured operator email as an auth exception", async () 
 });
 
 test("accepts the LINE bypass only on localhost", async () => {
-  const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true, profile: validProfile() });
+  const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true, profile: validProfile(), preferences: validPreferences() });
   const localResponse = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -138,6 +152,10 @@ test("rejects invalid profile values", async () => {
 
 function validProfile() {
   return { nickname: "ゆうき", faculty: "経済学部", academicYear: "2年", gender: "male" };
+}
+
+function validPreferences() {
+  return { purpose: "either", preferredGender: "any" };
 }
 
 test("keeps the MVP free of starter preview artifacts", async () => {

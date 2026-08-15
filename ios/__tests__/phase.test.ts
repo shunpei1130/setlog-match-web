@@ -2,6 +2,7 @@ import { phaseFor } from "@/lib/phase";
 import type { EventState, RemotePair } from "@/types";
 
 const event = (registered: boolean): EventState => ({
+  eventKey: "sat-2026-08-15",
   registration: registered ? {
     status: "waiting",
     lineStatus: "registered",
@@ -9,6 +10,8 @@ const event = (registered: boolean): EventState => ({
     faculty: "経済学部",
     academicYear: "2年",
     gender: "other",
+    purpose: "either",
+    preferredGender: "any",
     ageConfirmed: true,
     rulesAccepted: true,
   } : null,
@@ -16,11 +19,20 @@ const event = (registered: boolean): EventState => ({
   capacity: 100,
   remaining: 90,
   updatedAt: "2026-08-11T00:00:00.000Z",
+  startsAt: "2026-08-15T03:00:00.000Z",
+  registrationClosesAt: "2026-08-15T03:00:00.000Z",
+  decisionOpensAt: "2026-08-15T13:00:00.000Z",
+  registrationOpen: true,
+  canCancel: true,
+  decisionOpen: false,
 });
 
 const pair = (overrides: Partial<RemotePair> = {}): RemotePair => ({
   id: "pair-1",
   eventKey: "next-saturday",
+  startsAt: "2026-08-15T03:00:00.000Z",
+  decisionOpensAt: "2026-08-15T13:00:00.000Z",
+  decisionOpen: false,
   status: "published",
   setlogUrl: "https://setlog.example/room",
   setlogCode: "123456",

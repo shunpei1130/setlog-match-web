@@ -10,6 +10,7 @@ import {
 } from "../../../../lib/crypto";
 import { EmailDeliveryError, sendVerificationCode } from "../../../../lib/email";
 import { normalizeAllowedAuthEmail } from "../../../../lib/auth-email";
+import { recordFunnelEvent } from "../../../../lib/analytics";
 
 export const runtime = "nodejs";
 
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
       }
       throw error;
     }
+    await recordFunnelEvent(db, request, "auth_code_requested");
 
     return NextResponse.json({ sent: true, expiresIn: AUTH_CODE_TTL_SECONDS });
   } catch {
