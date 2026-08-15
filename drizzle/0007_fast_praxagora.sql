@@ -46,7 +46,7 @@ CREATE OR REPLACE FUNCTION "public"."register_event_waiting"(
 )
 RETURNS TABLE(registered boolean, waiting_count integer, capacity integer)
 LANGUAGE plpgsql
-AS '
+AS $$
 DECLARE
 	event_capacity integer;
 	event_waiting_count integer;
@@ -61,7 +61,7 @@ BEGIN
 	FOR UPDATE;
 
 	IF NOT FOUND THEN
-		RAISE EXCEPTION ''EVENT_NOT_FOUND'';
+		RAISE EXCEPTION 'EVENT_NOT_FOUND';
 	END IF;
 
 	SELECT r."id", r."status", r."line_status"
@@ -72,8 +72,8 @@ BEGIN
 	ORDER BY (r."user_id" = p_user_id) DESC
 	LIMIT 1;
 
-	IF existing_status = ''waiting''::registration_status
-		AND existing_line_status = ''registered''::line_status THEN
+	IF existing_status = 'waiting'::registration_status
+		AND existing_line_status = 'registered'::line_status THEN
 		UPDATE "event_registrations"
 		SET "user_id" = p_user_id,
 			"session_id" = p_session_id,
@@ -98,8 +98,8 @@ BEGIN
 		UPDATE "event_registrations"
 		SET "user_id" = p_user_id,
 			"session_id" = p_session_id,
-			"status" = ''waiting'',
-			"line_status" = ''registered'',
+			"status" = 'waiting',
+			"line_status" = 'registered',
 			"nickname" = p_nickname,
 			"faculty" = p_faculty,
 			"academic_year" = p_academic_year,
@@ -114,7 +114,7 @@ BEGIN
 			"nickname", "faculty", "academic_year", "gender", "purpose", "preferred_gender", "updated_at"
 		)
 		VALUES (
-			p_event_id, p_user_id, p_session_id, ''waiting'', ''registered'',
+			p_event_id, p_user_id, p_session_id, 'waiting', 'registered',
 			p_nickname, p_faculty, p_academic_year, p_gender, p_purpose, p_preferred_gender, now()
 		);
 	END IF;
@@ -125,4 +125,4 @@ BEGIN
 
 	RETURN QUERY SELECT true, event_waiting_count + 1, event_capacity;
 END;
-';
+$$;
