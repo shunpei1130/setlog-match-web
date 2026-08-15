@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && vinext build && node --test tests/rendered-html.test.mjs tests/mobile-api-contract.test.mjs tests/instagram-leads.test.mjs tests/event-schedule.test.mjs tests/matching-preferences.test.mjs",
+    "test": "npm run build && vinext build && node --test tests/rendered-html.test.mjs tests/mobile-api-contract.test.mjs tests/instagram-leads.test.mjs tests/event-schedule.test.mjs tests/matching-preferences.test.mjs tests/pair-security.test.mjs",
     "test:db": "vinext build && node --test tests/mobile-auth-db.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "sales:validate": "node scripts/validate-instagram-leads.mjs --csv sales/instagram-leads.csv",

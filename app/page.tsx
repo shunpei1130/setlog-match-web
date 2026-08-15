@@ -392,9 +392,10 @@ export default function Home() {
     let cancelled = false;
     const loadAccount = async () => {
       try {
-        const [meResponse, lineResponse] = await Promise.all([
+        const [meResponse, lineResponse, registrationResponse] = await Promise.all([
           fetch("/api/me", { cache: "no-store" }),
           fetch("/api/line/status", { cache: "no-store" }),
+          fetch(`/api/events/${encodeURIComponent(DEMO_EVENT_KEY)}/registrations`, { cache: "no-store" }),
         ]);
         if (meResponse.ok) {
           const me = await meResponse.json() as { user?: { email?: string } };
@@ -406,10 +407,50 @@ export default function Home() {
         if (lineResponse.ok) {
           const line = await lineResponse.json() as { linked?: boolean; followed?: boolean; officialAccountUrl?: unknown };
           if (!cancelled && typeof line.officialAccountUrl === "string") setLineOfficialAccountUrl(line.officialAccountUrl);
-          if (!cancelled && line.linked && line.followed) {
+          if (!cancelled) {
             setState((previous) => ({
               ...previous,
-              lineRegistration: { status: "registered", source: "line_live", reminderScheduled: true },
+              lineRegistration: line.linked && line.followed
+                ? { status: "registered", source: "line_live", reminderScheduled: true }
+                : { status: "not_started", source: "none", reminderScheduled: false },
+            }));
+          }
+        }
+        if (registrationResponse.ok) {
+          const registrationPayload = await registrationResponse.json() as {
+            eventKey?: unknown;
+            registration?: {
+              status?: unknown;
+              nickname?: unknown;
+              faculty?: unknown;
+              academicYear?: unknown;
+              gender?: unknown;
+              purpose?: unknown;
+              preferredGender?: unknown;
+              ageConfirmed?: unknown;
+              rulesAccepted?: unknown;
+            } | null;
+          };
+          const registration = registrationPayload.registration;
+          if (!cancelled && registration?.status === "waiting") {
+            setState((previous) => ({
+              ...previous,
+              eventKey: typeof registrationPayload.eventKey === "string" ? registrationPayload.eventKey : previous.eventKey,
+              participation: true,
+              phase: previous.phase === "landing" || previous.phase === "participation" ? "waiting" : previous.phase,
+              consent: {
+                age: registration.ageConfirmed === true,
+                rules: registration.rulesAccepted === true,
+              },
+              profile: {
+                ...previous.profile,
+                nickname: typeof registration.nickname === "string" ? registration.nickname : previous.profile.nickname,
+                faculty: typeof registration.faculty === "string" ? registration.faculty : previous.profile.faculty,
+                year: typeof registration.academicYear === "string" ? registration.academicYear : previous.profile.year,
+                gender: typeof registration.gender === "string" ? registration.gender : previous.profile.gender,
+                purpose: typeof registration.purpose === "string" ? registration.purpose : previous.profile.purpose,
+                preferredGender: typeof registration.preferredGender === "string" ? registration.preferredGender : previous.profile.preferredGender,
+              },
             }));
           }
         }
@@ -653,7 +694,7 @@ export default function Home() {
   const requestAuthCode = async () => {
     const email = normalizeEmailAddress(schoolEmail);
     if (!email) {
-      updateState({ notice: "青学のメールアドレスを入力してください。" });
+      updateState({ notice: "登録対象のメールアドレスを入力してください。" });
       return;
     }
     setAuthSending(true);
@@ -752,12 +793,12 @@ export default function Home() {
       return;
     }
     if (!localTest && !authenticatedEmail) {
-      updateState({ notice: "先に青学メールの認証を完了してください。" });
+      updateState({ notice: "先に登録対象のメール認証を完了してください。" });
       return;
     }
-    const normalizedSchoolEmail = normalizeEmailAddress(schoolEmail);
-    if (!localTest && !normalizedSchoolEmail) {
-      updateState({ notice: "青学のメールアドレス（@aoyama.jp または @aoyama.ac.jp）を入力してください。" });
+    const normalizedAuthEmail = normalizeEmailAddress(schoolEmail);
+    if (!localTest && !normalizedAuthEmail) {
+      updateState({ notice: "登録対象のメールアドレスを入力してください。" });
       return;
     }
     if (!localTest && state.lineRegistration.status !== "registered") {
@@ -779,7 +820,7 @@ export default function Home() {
           lineRegistered: state.lineRegistration.source === "line_mock" || state.lineRegistration.source === "line_live",
           lineTestBypass: localTestRegistration,
           schoolEmailTestBypass: localTestRegistration,
-          ...(normalizedSchoolEmail ? { schoolEmail: normalizedSchoolEmail } : {}),
+          ...(normalizedAuthEmail ? { schoolEmail: normalizedAuthEmail } : {}),
         }),
       });
       const payload = await response.json().catch(() => null) as {
@@ -918,7 +959,7 @@ export default function Home() {
 
   const startLineRegistration = () => {
     if (!localTest && !authenticatedEmail) {
-      updateState({ notice: "LINE連携の前に、青学メールを認証してください。" });
+      updateState({ notice: "LINE連携の前に、登録対象のメールを認証してください。" });
       return;
     }
     updateState({ notice: null });

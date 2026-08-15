@@ -2,21 +2,12 @@ import { and, eq, or, sql } from "drizzle-orm";
 import type { getDb } from "../db";
 import { blocks, contactDisclosures, pairDecisions } from "../db/schema";
 import { timingForEvent } from "./event-schedule";
+import { resolvePairResult, type PairDecisionInput, type PairResult } from "./pair-result";
+
+export { resolvePairResult } from "./pair-result";
+export type { PairDecisionInput, PairResult } from "./pair-result";
 
 type Database = ReturnType<typeof getDb>;
-
-export type PairDecisionInput = {
-  instagram: boolean;
-  line: boolean;
-  continue: boolean;
-  none: boolean;
-};
-
-export type PairResult =
-  | { kind: "pending"; items: []; contacts: null }
-  | { kind: "ended"; items: []; contacts: null }
-  | { kind: "continued"; items: ["continue"]; contacts: null }
-  | { kind: "disclosed"; items: Array<"instagram" | "line">; contacts: { instagram?: string; line?: string } };
 
 export type PairView = {
   id: string;
@@ -73,13 +64,6 @@ function rowToParticipant(row: PairRow, id: string) {
   };
 }
 
-function contactFor(row: PairRow, userId: string, channel: "instagram" | "line") {
-  const isA = row.participantAId === userId;
-  return channel === "instagram"
-    ? (isA ? row.aInstagram : row.bInstagram)
-    : (isA ? row.aLine : row.bLine);
-}
-
 function decisionValues(decision: typeof pairDecisions.$inferSelect | undefined): PairView["decision"] {
   if (!decision) return null;
   return {
@@ -107,28 +91,6 @@ export function validateDecision(input: unknown): PairDecisionInput | null {
   }
   if (!result.none && !result.instagram && !result.line && !result.continue) return null;
   return result;
-}
-
-export function resolvePairResult(
-  left: PairDecisionInput | undefined,
-  right: PairDecisionInput | undefined,
-  row: PairRow,
-  currentUserId: string,
-): PairResult {
-  if (!left || !right) return { kind: "pending", items: [], contacts: null };
-  if (left.none || right.none) return { kind: "ended", items: [], contacts: null };
-  const items = (["instagram", "line"] as const).filter((channel) => left[channel] && right[channel]);
-  const continueBoth = left.continue && right.continue;
-  if (items.length === 0 && continueBoth) return { kind: "continued", items: ["continue"], contacts: null };
-  if (items.length === 0) return { kind: "ended", items: [], contacts: null };
-  const contacts: { instagram?: string; line?: string } = {};
-  for (const channel of items) {
-    const ownContact = contactFor(row, currentUserId, channel);
-    const partnerId = row.participantAId === currentUserId ? row.participantBId : row.participantAId;
-    const partnerContact = contactFor(row, partnerId, channel);
-    if (ownContact && partnerContact) contacts[channel] = partnerContact;
-  }
-  return { kind: "disclosed", items, contacts };
 }
 
 async function findPairRow(db: Database, pairId: string): Promise<PairRow | null> {
