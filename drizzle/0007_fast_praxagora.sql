@@ -120,9 +120,10 @@ WITH event_lock AS (
 		"preferred_gender" = p_preferred_gender,
 		"updated_at" = now()
 	FROM event_lock AS e
-	JOIN existing AS x ON x."id" = r."id"
-	WHERE (x."status" = 'waiting'::registration_status AND x."line_status" = 'registered'::line_status)
-	   OR e."waiting_count" < e."capacity"
+	CROSS JOIN existing AS x
+	WHERE ((x."status" = 'waiting'::registration_status AND x."line_status" = 'registered'::line_status)
+	   OR e."waiting_count" < e."capacity")
+	  AND r."id" = x."id"
 	RETURNING r."id"
 ), inserted AS (
 	INSERT INTO "event_registrations" (
