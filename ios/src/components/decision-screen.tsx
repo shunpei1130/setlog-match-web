@@ -95,6 +95,7 @@ export function DecisionScreen({
                   key={option}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: selected, disabled: unavailable }}
+                  disabled={unavailable}
                   onPress={() => choose(option)}
                   style={({ pressed }) => [
                     styles.option,

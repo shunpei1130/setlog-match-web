@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({
       authorizeUrl: buildLineLoginUrl(state),
-      redirectUrl: "setmob://line-callback",
+      redirectUrl: "setlogmatch://line-callback",
       expiresAt: expiresAt.toISOString(),
     });
   } catch {

@@ -75,6 +75,7 @@ export async function PATCH(
         .where(and(
           eq(eventRegistrations.eventId, existing.eventId),
           eq(eventRegistrations.status, "waiting"),
+          eq(eventRegistrations.lineStatus, "registered"),
         ));
       const registeredIds = new Set(registrations.map((registration) => registration.userId).filter(Boolean));
       if (!registeredIds.has(participantAId) || !registeredIds.has(participantBId)) {

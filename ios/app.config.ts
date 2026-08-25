@@ -6,12 +6,16 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/set-mob-icon.png",
-  scheme: "setmob",
+  scheme: "setlogmatch",
   userInterfaceStyle: "light",
   ios: {
-    bundleIdentifier: "jp.setmob.app",
+    bundleIdentifier: "jp.setlog.match",
     supportsTablet: false,
     config: { usesNonExemptEncryption: false },
+    infoPlist: {
+      NSLocalNetworkUsageDescription: "開発中に同じWi-Fi上のAPIへ接続します。",
+      NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
+    },
   },
   web: {
     output: "static",

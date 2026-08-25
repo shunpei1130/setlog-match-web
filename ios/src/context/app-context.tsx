@@ -160,11 +160,12 @@ export function AppProvider({ children }: PropsWithChildren) {
       await saveAccessToken(result.accessToken);
       await refresh();
     } catch (error) {
-      setNotice(messageForError(error));
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
     } finally {
       setBusy(false);
     }
-  }, [refresh]);
+  }, [clearSession, refresh]);
 
   const register = useCallback(async (input: RegistrationInput) => {
     const token = tokenRef.current;
@@ -199,11 +200,12 @@ export function AppProvider({ children }: PropsWithChildren) {
       setNotice(lineCallbackMessage(lineCallbackStatus(result.url)));
       await refresh(true);
     } catch (error) {
-      setNotice(messageForError(error));
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
     } finally {
       setBusy(false);
     }
-  }, [refresh]);
+  }, [clearSession, refresh]);
 
   const cancelRegistration = useCallback(async () => {
     const token = tokenRef.current;
@@ -237,11 +239,12 @@ export function AppProvider({ children }: PropsWithChildren) {
       setPair(publishedPair);
       setPhase(phaseFor(event, publishedPair));
     } catch (error) {
-      setNotice(messageForError(error));
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
     } finally {
       setBusy(false);
     }
-  }, [event]);
+  }, [clearSession, event]);
 
   const submitDecision = useCallback(async (decision: PairDecision) => {
     const token = tokenRef.current;
@@ -258,11 +261,12 @@ export function AppProvider({ children }: PropsWithChildren) {
         setPhase("result");
       }
     } catch (error) {
-      setNotice(messageForError(error));
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
     } finally {
       setBusy(false);
     }
-  }, [pair]);
+  }, [clearSession, pair]);
 
   const blockPair = useCallback(async () => {
     const token = tokenRef.current;
@@ -274,11 +278,12 @@ export function AppProvider({ children }: PropsWithChildren) {
       setPhase("ended");
       setNotice("相手をブロックし、このDay Pairを終了しました。");
     } catch (error) {
-      setNotice(messageForError(error));
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
     } finally {
       setBusy(false);
     }
-  }, [pair]);
+  }, [clearSession, pair]);
 
   const reportPair = useCallback(async (reason: string, detail: string) => {
     const token = tokenRef.current;
@@ -290,11 +295,12 @@ export function AppProvider({ children }: PropsWithChildren) {
       setPhase("ended");
       setNotice("運営へ通報し、このDay Pairを終了しました。");
     } catch (error) {
-      setNotice(messageForError(error));
+      if (error instanceof ApiError && error.status === 401) await clearSession();
+      else setNotice(messageForError(error));
     } finally {
       setBusy(false);
     }
-  }, [pair]);
+  }, [clearSession, pair]);
 
   const signOut = useCallback(async () => {
     const token = tokenRef.current;

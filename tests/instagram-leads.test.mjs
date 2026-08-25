@@ -32,3 +32,11 @@ test("rejects duplicates and unsafe DM candidates", () => {
   assert.equal(result.errors.some((error) => error.includes("duplicate")), true);
   assert.equal(result.warnings.some((warning) => warning.includes("non-public/unknown")), true);
 });
+
+test("strict validation accepts a verified list larger than the minimum target", () => {
+  const headers = "instagram_username,profile_url,display_name,follower_count,follower_count_display,account_type,public_status,aoyama_signal,discovery_channel,source_account,aoyama_evidence,evidence_url,confidence,last_checked_at,adult_service_eligibility,dm_status,owner,notes";
+  const rows = Array.from({ length: 1000 }, (_, index) => `sample${index},https://www.instagram.com/sample${index}/,Sample ${index},100,100,student_media,public,profile_explicit,keyword_search,,プロフィールに青学と明記,https://www.instagram.com/sample${index}/,A,2026-08-11,unknown,not_checked,,`);
+  const result = validateLeads(parseCsv([headers, ...rows, rows[0].replace("sample0", "sample1000")].join("\n")), { strict: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.rows, 1001);
+});

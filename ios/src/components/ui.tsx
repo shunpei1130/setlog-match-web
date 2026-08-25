@@ -175,7 +175,7 @@ export function Field({
         {...props}
         accessibilityLabel={label}
         accessibilityState={{ disabled: props.editable === false }}
-        placeholderTextColor="#9da8a1"
+        placeholderTextColor={colors.inkSoft}
         style={[styles.input, props.multiline && styles.inputMultiline, error && styles.inputError]}
       />
       {error ? <Text accessibilityRole="alert" style={styles.fieldError}>{error}</Text> : null}

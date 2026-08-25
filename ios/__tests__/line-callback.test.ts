@@ -8,7 +8,7 @@ describe("LINE callback", () => {
     ["expired", "有効期限"],
     ["invalid-state", "確認できませんでした"],
   ])("%sを個別表示する", (status, message) => {
-    const url = `setmob://line-callback?status=${status}`;
+    const url = `setlogmatch://line-callback?status=${status}`;
     expect(lineCallbackStatus(url)).toBe(status);
     expect(lineCallbackMessage(lineCallbackStatus(url))).toContain(message);
   });

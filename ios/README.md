@@ -35,7 +35,7 @@ LINE DevelopersのLogin channelには、既存Web APIのHTTPS callbackを登録�
 https://YOUR_API_HOST/api/line/callback
 ```
 
-iOSアプリは`POST /api/mobile/line/login`から一回限り・10分有効のstate付き認可URLを取得します。callback処理後、APIは`setmob://line-callback?status=...`へ戻します。Bundle IDは`jp.setmob.app`、URLスキームは`setmob`です。
+iOSアプリは`POST /api/mobile/line/login`から一回限り・10分有効のstate付き認可URLを取得します。callback処理後、APIは`setlogmatch://line-callback?status=...`へ戻します。Bundle IDは`jp.setlog.match`、URLスキームは`setlogmatch`です。
 
 LINE LoginとMessaging APIの環境変数はすべてWeb/API側に設定し、`ios/.env.local`へは置かないでください。
 

@@ -67,7 +67,7 @@ export function SafetyModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { position: "absolute", inset: 0, backgroundColor: "rgba(22, 53, 49, 0.72)" },
+  backdrop: { position: "absolute", inset: 0, backgroundColor: colors.ink, opacity: 0.72 },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "90%", backgroundColor: colors.paper, borderTopWidth: 6, borderTopColor: colors.accent },
   content: { padding: 18 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },

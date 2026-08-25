@@ -153,7 +153,7 @@ export function validateLeads({ headers, records }, { strict = false } = {}) {
   });
 
   if (strict) {
-    if (records.length !== 1000) errors.push(`Strict: expected exactly 1000 unique rows, found ${records.length}`);
+    if (records.length < 1000) errors.push(`Strict: expected at least 1000 unique rows, found ${records.length}`);
     if (publicCount !== records.length) errors.push(`Strict: all rows must be public, found ${records.length - publicCount} non-public/unknown rows`);
     if (confidenceABCount < 800) errors.push(`Strict: expected at least 800 A/B rows, found ${confidenceABCount}`);
     if (confidenceCCount > 200) errors.push(`Strict: expected at most 200 C rows, found ${confidenceCCount}`);

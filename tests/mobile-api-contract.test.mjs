@@ -45,12 +45,26 @@ test("mobile LINE state is hashed, expiring, and one-time", async () => {
   assert.match(migration, /CREATE TABLE "line_login_states"/);
   assert.match(login, /10 \* 60 \* 1000/);
   assert.match(login, /stateHash: hashSecret\(state\)/);
-  assert.match(login, /setmob:\/\/line-callback/);
+  assert.match(login, /setlogmatch:\/\/line-callback/);
   assert.match(callback, /isNull\(lineLoginStates\.consumedAt\)/);
   assert.match(callback, /gt\(lineLoginStates\.expiresAt, now\)/);
   assert.match(callback, /consumedAt: now/);
   assert.match(callback, /linked-not-following/);
   assert.match(callback, /already-linked/);
+});
+
+test("iOS release identifiers and LINE callback scheme stay aligned", async () => {
+  const [config, mobileLogin, callback] = await Promise.all([
+    source("../ios/app.config.ts"),
+    source("../app/api/mobile/line/login/route.ts"),
+    source("../app/api/line/callback/route.ts"),
+  ]);
+
+  assert.match(config, /scheme: "setlogmatch"/);
+  assert.match(config, /bundleIdentifier: "jp\.setlog\.match"/);
+  assert.match(config, /NSLocalNetworkUsageDescription/);
+  assert.match(mobileLogin, /setlogmatch:\/\/line-callback/);
+  assert.match(callback, /setlogmatch:\/\/line-callback/);
 });
 
 test("failed verification email does not leave a throttling code behind", async () => {
@@ -121,6 +135,11 @@ test("attribution, mutual preferences, and report workflow are server enforced",
   assert.match(metrics, /registrationsCompleted/);
   assert.match(reportStatus, /reviewedAt/);
   assert.match(reportStatus, /resolvedAt/);
+});
+
+test("admin pair edits only use LINE-registered participants", async () => {
+  const pairs = await source("../app/api/admin/pairs/[pairId]/route.ts");
+  assert.match(pairs, /eq\(eventRegistrations\.lineStatus, "registered"\)/);
 });
 
 test("block and report stay participant-authenticated safety actions", async () => {
