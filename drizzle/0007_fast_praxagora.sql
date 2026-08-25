@@ -1,6 +1,30 @@
-CREATE TYPE "public"."funnel_event_name" AS ENUM('qualified_visit', 'auth_code_requested', 'email_verified', 'line_linked', 'line_followed', 'registration_completed', 'event_activated', 'decision_submitted');--> statement-breakpoint
-CREATE TYPE "public"."gender_preference" AS ENUM('any', 'male', 'female', 'other');--> statement-breakpoint
-CREATE TYPE "public"."match_purpose" AS ENUM('friend', 'romance', 'either');--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."__setlog_create_funnel_event_name"() RETURNS void
+LANGUAGE sql
+AS $body$ CREATE TYPE "public"."funnel_event_name" AS ENUM('qualified_visit', 'auth_code_requested', 'email_verified', 'line_linked', 'line_followed', 'registration_completed', 'event_activated', 'decision_submitted') $body$;--> statement-breakpoint
+SELECT "public"."__setlog_create_funnel_event_name"()
+WHERE NOT EXISTS (
+	SELECT 1 FROM pg_type
+	WHERE typname = 'funnel_event_name' AND typnamespace = 'public'::regnamespace
+);--> statement-breakpoint
+DROP FUNCTION "public"."__setlog_create_funnel_event_name"();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."__setlog_create_gender_preference"() RETURNS void
+LANGUAGE sql
+AS $body$ CREATE TYPE "public"."gender_preference" AS ENUM('any', 'male', 'female', 'other') $body$;--> statement-breakpoint
+SELECT "public"."__setlog_create_gender_preference"()
+WHERE NOT EXISTS (
+	SELECT 1 FROM pg_type
+	WHERE typname = 'gender_preference' AND typnamespace = 'public'::regnamespace
+);--> statement-breakpoint
+DROP FUNCTION "public"."__setlog_create_gender_preference"();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."__setlog_create_match_purpose"() RETURNS void
+LANGUAGE sql
+AS $body$ CREATE TYPE "public"."match_purpose" AS ENUM('friend', 'romance', 'either') $body$;--> statement-breakpoint
+SELECT "public"."__setlog_create_match_purpose"()
+WHERE NOT EXISTS (
+	SELECT 1 FROM pg_type
+	WHERE typname = 'match_purpose' AND typnamespace = 'public'::regnamespace
+);--> statement-breakpoint
+DROP FUNCTION "public"."__setlog_create_match_purpose"();--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "funnel_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"visitor_id" uuid NOT NULL,
@@ -22,8 +46,26 @@ ALTER TABLE "event_registrations" ADD COLUMN IF NOT EXISTS "preferred_gender" "g
 ALTER TABLE "safety_reports" ADD COLUMN IF NOT EXISTS "admin_note" text;--> statement-breakpoint
 ALTER TABLE "safety_reports" ADD COLUMN IF NOT EXISTS "reviewed_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "safety_reports" ADD COLUMN IF NOT EXISTS "resolved_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "funnel_events" ADD CONSTRAINT "funnel_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "funnel_events" ADD CONSTRAINT "funnel_events_event_id_events_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."__setlog_add_funnel_events_user_fk"() RETURNS void
+LANGUAGE sql
+AS $body$ ALTER TABLE "funnel_events" ADD CONSTRAINT "funnel_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action $body$;--> statement-breakpoint
+SELECT "public"."__setlog_add_funnel_events_user_fk"()
+WHERE NOT EXISTS (
+	SELECT 1 FROM pg_constraint
+	WHERE conname = 'funnel_events_user_id_users_id_fk'
+		AND conrelid = 'public.funnel_events'::regclass
+);--> statement-breakpoint
+DROP FUNCTION "public"."__setlog_add_funnel_events_user_fk"();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."__setlog_add_funnel_events_event_fk"() RETURNS void
+LANGUAGE sql
+AS $body$ ALTER TABLE "funnel_events" ADD CONSTRAINT "funnel_events_event_id_events_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE set null ON UPDATE no action $body$;--> statement-breakpoint
+SELECT "public"."__setlog_add_funnel_events_event_fk"()
+WHERE NOT EXISTS (
+	SELECT 1 FROM pg_constraint
+	WHERE conname = 'funnel_events_event_id_events_id_fk'
+		AND conrelid = 'public.funnel_events'::regclass
+);--> statement-breakpoint
+DROP FUNCTION "public"."__setlog_add_funnel_events_event_fk"();--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "funnel_events_visitor_created_idx" ON "funnel_events" USING btree ("visitor_id","created_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "funnel_events_user_created_idx" ON "funnel_events" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "funnel_events_name_created_idx" ON "funnel_events" USING btree ("event_name","created_at");--> statement-breakpoint
