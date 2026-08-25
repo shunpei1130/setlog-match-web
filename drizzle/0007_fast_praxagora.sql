@@ -1,6 +1,36 @@
-CREATE TYPE IF NOT EXISTS "public"."funnel_event_name" AS ENUM('qualified_visit', 'auth_code_requested', 'email_verified', 'line_linked', 'line_followed', 'registration_completed', 'event_activated', 'decision_submitted');--> statement-breakpoint
-CREATE TYPE IF NOT EXISTS "public"."gender_preference" AS ENUM('any', 'male', 'female', 'other');--> statement-breakpoint
-CREATE TYPE IF NOT EXISTS "public"."match_purpose" AS ENUM('friend', 'romance', 'either');--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type
+    WHERE typname = 'funnel_event_name'
+      AND typnamespace = 'public'::regnamespace
+  ) THEN
+    EXECUTE 'CREATE TYPE "public"."funnel_event_name" AS ENUM (''qualified_visit'', ''auth_code_requested'', ''email_verified'', ''line_linked'', ''line_followed'', ''registration_completed'', ''event_activated'', ''decision_submitted'')';
+  END IF;
+END
+$$;--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type
+    WHERE typname = 'gender_preference'
+      AND typnamespace = 'public'::regnamespace
+  ) THEN
+    EXECUTE 'CREATE TYPE "public"."gender_preference" AS ENUM (''any'', ''male'', ''female'', ''other'')';
+  END IF;
+END
+$$;--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type
+    WHERE typname = 'match_purpose'
+      AND typnamespace = 'public'::regnamespace
+  ) THEN
+    EXECUTE 'CREATE TYPE "public"."match_purpose" AS ENUM (''friend'', ''romance'', ''either'')';
+  END IF;
+END
+$$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "funnel_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"visitor_id" uuid NOT NULL,
