@@ -108,7 +108,9 @@ test("weekly events expose cancellation and enforce the private decision window"
   assert.match(pair, /decisionOpen/);
   assert.match(decision, /DECISION_NOT_OPEN/);
   assert.match(eventMigration, /WHERE "event_key" = 'next-saturday'/);
-  assert.match(registrationMigration, /existing_id IS NOT NULL/);
+  assert.match(registrationMigration, /WITH event_lock AS/);
+  assert.match(registrationMigration, /active_existing/);
+  assert.match(registrationMigration, /EXISTS \(SELECT 1 FROM changed\)/);
   assert.match(registrationMigration, /"status" = (?:''waiting''|'waiting')/);
   assert.doesNotMatch(cron, /event_key = 'next-saturday'/);
   assert.match(cron, /e\.starts_at <= now\(\) \+ interval '18 hours'/);
