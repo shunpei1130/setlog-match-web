@@ -283,3 +283,4 @@ Codexは準備・実装・素材制作・ブラウザ設定・分析を担当し
 - `.env.local`の本番`DATABASE_URL`をプロセス内だけで読み込み、`npm run db:migrate`を実行。Neon main（`br-divine-flower-axs271rq`）で`migrations applied successfully`を確認した。既存の8件が適用済みで、追加の破壊的変更は発生していない。
 - 検証済みコミット`76386eb`を`origin/main`へfast-forward pushし、`setlog-match-web`のVercelチェックが`success`になった。Vercelの本番Git連携を通じた反映起動まで確認した。
 - LINEリッチメニューは前回の保存証跡（`set-mob メニュー`、3導線）を確認済み。ただし現在のブラウザ接続に管理画面セッションがないため、現行期間への保存操作は未実施。接続回復後に既存設定を再確認して保存する。
+- 連絡先開示ロジックを要件に合わせて修正し、`continue`がどちらか一方でも選ばれた場合は連絡先を開示しないこと、双方が`continue`を選んだ場合だけ継続結果にするテストを追加した。全体テストは33件成功。

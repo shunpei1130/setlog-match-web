@@ -35,14 +35,17 @@ export function resolvePairResult(
 ): PairResult {
   if (!left || !right) return { kind: "pending", items: [], contacts: null };
   if (left.none || right.none) return { kind: "ended", items: [], contacts: null };
+  if (left.continue || right.continue) {
+    return left.continue && right.continue
+      ? { kind: "continued", items: ["continue"], contacts: null }
+      : { kind: "ended", items: [], contacts: null };
+  }
   const items = (["instagram", "line"] as const).filter((channel) => (
     left[channel]
     && right[channel]
     && Boolean(contactFor(row, row.participantAId, channel))
     && Boolean(contactFor(row, row.participantBId, channel))
   ));
-  const continueBoth = left.continue && right.continue;
-  if (items.length === 0 && continueBoth) return { kind: "continued", items: ["continue"], contacts: null };
   if (items.length === 0) return { kind: "ended", items: [], contacts: null };
   const contacts: { instagram?: string; line?: string } = {};
   for (const channel of items) {

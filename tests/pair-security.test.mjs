@@ -36,3 +36,25 @@ test("does not disclose a channel when the partner has no saved contact", () => 
 
   assert.deepEqual(result, { kind: "ended", items: [], contacts: null });
 });
+
+test("does not disclose contacts when either user chooses to continue", () => {
+  const result = resolvePairResult(
+    { instagram: true, line: false, continue: true, none: false },
+    { instagram: true, line: false, continue: false, none: false },
+    row,
+    "user-a",
+  );
+
+  assert.deepEqual(result, { kind: "ended", items: [], contacts: null });
+});
+
+test("returns a continued result only when both users choose to continue", () => {
+  const result = resolvePairResult(
+    { instagram: false, line: false, continue: true, none: false },
+    { instagram: false, line: false, continue: true, none: false },
+    row,
+    "user-a",
+  );
+
+  assert.deepEqual(result, { kind: "continued", items: ["continue"], contacts: null });
+});
