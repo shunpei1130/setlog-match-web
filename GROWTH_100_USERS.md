@@ -285,3 +285,9 @@ Codexは準備・実装・素材制作・ブラウザ設定・分析を担当し
 - LINEリッチメニューは前回の保存証跡（`set-mob メニュー`、3導線）を確認済み。ただし現在のブラウザ接続に管理画面セッションがないため、現行期間への保存操作は未実施。接続回復後に既存設定を再確認して保存する。
 - 連絡先開示ロジックを要件に合わせて修正し、`continue`がどちらか一方でも選ばれた場合は連絡先を開示しないこと、双方が`continue`を選んだ場合だけ継続結果にするテストを追加した。全体テストは33件成功。
 - LINE状態確認APIを改善し、友だち追加後の再確認時にMessaging APIの現在状態を同期するようにした。LINE API障害時は最後に確認できた状態を保持する。
+
+## 17. 2026-08-30本番反映再確認
+
+- Neon本番mainへ接続し、Drizzle適用8件、`funnel_events`、`authentication_codes`、`event_pairs`、`pair_decisions`、`contact_disclosures`、`blocks`、`safety_reports`の存在を直接確認した。再実行した`npm run db:migrate`は既存適用済み状態で終了コード1になったため、新規適用済みとは記録せず、読み取り確認を本番状態の根拠とした。
+- 最新コミット`75c3695`についてGitHubのVercelチェックが`success`、公開URL`https://setlog-match-web.vercel.app/`がHTTP 200で、ページタイトルが`set-mob | 青学生限定の土曜マッチング`であることを確認した。
+- LINEリッチメニューの現行期間への保存は、ブラウザ連携が空の状態で管理画面を操作できないため未完了。ユーザーがLINE Official Account Managerを開いたブラウザをこのスレッドへ再接続した後、既存3導線を再確認して保存する。
