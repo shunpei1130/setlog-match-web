@@ -289,5 +289,5 @@ Codexは準備・実装・素材制作・ブラウザ設定・分析を担当し
 ## 17. 2026-08-30本番反映再確認
 
 - Neon本番mainへ接続し、Drizzle適用8件、`funnel_events`、`authentication_codes`、`event_pairs`、`pair_decisions`、`contact_disclosures`、`blocks`、`safety_reports`の存在を直接確認した。再実行した`npm run db:migrate`は既存適用済み状態で終了コード1になったため、新規適用済みとは記録せず、読み取り確認を本番状態の根拠とした。
-- 最新コミット`75c3695`についてGitHubのVercelチェックが`success`、公開URL`https://setlog-match-web.vercel.app/`がHTTP 200で、ページタイトルが`set-mob | 青学生限定の土曜マッチング`であることを確認した。
+- アプリ変更を含むコミット`75c3695`についてGitHubのVercelチェックが`success`、その後の記録更新コミットでも再デプロイが`success`。公開URL`https://setlog-match-web.vercel.app/`がHTTP 200で、ページタイトルが`set-mob | 青学生限定の土曜マッチング`であることを確認した。
 - LINEリッチメニューの現行期間への保存は、ブラウザ連携が空の状態で管理画面を操作できないため未完了。ユーザーがLINE Official Account Managerを開いたブラウザをこのスレッドへ再接続した後、既存3導線を再確認して保存する。
