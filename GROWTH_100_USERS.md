@@ -161,7 +161,7 @@
 | G-001 | P0 | CODEX | DONE | 週次イベント、キャンセル、判定時刻制御を実装 | コード・Web/iOS反映・自動テスト、Neon本番移行、Vercel本番反映を確認済み |
 | G-002 | P0 | CODEX | DONE | 利用規約・プライバシー・安全・問い合わせ・削除導線を実装 | 運営者名・問い合わせ先を含め、本番で閲覧可能 |
 | G-003 | P0 | CODEX | DONE | `ref`／UTM保存とファネル計測、運営集計を実装 | コード・管理API・画面・自動計測・本番DB反映・初回実数確認を完了。以後の週次レビューはG-011で継続 |
-| G-004 | P0 | CODEX | IN_PROGRESS | Node 22で全検証と本番E2E手順を実施 | lint、build、Web31テスト、iOS型検査・15テスト・書き出しは成功。実メール・LINEの2アカウントE2Eは運営者操作待ち |
+| G-004 | P0 | CODEX | IN_PROGRESS | Node 22で全検証と本番E2E手順を実施 | lint、build、Web31テスト、iOS型検査・15テスト・書き出しは成功。`operations/PRODUCTION_E2E_CHECKLIST.md`を準備済み。実メール・LINEの2アカウントE2Eは運営者操作待ち |
 | G-005 | P0 | CODEX | DONE | 通報の対応状態更新と運営手順を追加 | reviewed／resolved更新と記録が可能 |
 | G-006 | P0 | CODEX | DONE | 利用目的・希望条件と公平なペア運営を実装 | 友人／恋愛／どちらでもと本人指定条件を保存し、希望外ペアを作れない |
 | G-007 | P1 | CODEX | IN_PROGRESS | LINEリッチメニューを作成・設定 | 画像・3導線・計測URLの初回保存は完了。現行表示期間への再保存をLINE管理画面で実施する |
