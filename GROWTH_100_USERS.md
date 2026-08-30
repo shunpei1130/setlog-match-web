@@ -291,4 +291,5 @@ Codexは準備・実装・素材制作・ブラウザ設定・分析を担当し
 - Neon本番mainへ接続し、Drizzle適用8件、`funnel_events`、`authentication_codes`、`event_pairs`、`pair_decisions`、`contact_disclosures`、`blocks`、`safety_reports`の存在を直接確認した。`npm run db:migrate`を同じ本番接続先で再実行し、`migrations applied successfully`と終了コード0を確認した。追加のスキーマ変更は発生していない。
 - アプリ変更を含むコミット`75c3695`についてGitHubのVercelチェックが`success`、その後の記録更新コミットでも再デプロイが`success`。公開URL`https://setlog-match-web.vercel.app/`がHTTP 200で、ページタイトルが`set-mob | 青学生限定の土曜マッチング`であることを確認した。
 - 公開本番でトップ、規約、プライバシー、安全、問い合わせがHTTP 200、未認証の`/api/me`が401、未認証の管理APIが403、未許可メールの認証コード発行が400、未認証Cronが401になるスモーク確認を実施した。実ユーザー登録・メール送信は発生させていない。
+- 本番登録APIのローカルテスト用バイパスを`NODE_ENV`でも無効化し、productionビルドでlocalhost相当のリクエストも拒否するテストを追加した。`npm test`は33/33、`npm run lint`は成功し、本番URLへのバイパス付き登録リクエストも400で拒否された。
 - LINEリッチメニューの現行期間への保存は、ブラウザ連携が空の状態で管理画面を操作できないため未完了。ユーザーがLINE Official Account Managerを開いたブラウザをこのスレッドへ再接続した後、既存3導線を再確認して保存する。
