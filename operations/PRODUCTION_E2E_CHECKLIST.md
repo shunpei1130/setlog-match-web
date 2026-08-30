@@ -10,7 +10,8 @@
 
 - [ ] 本番URL `https://setlog-match-web.vercel.app/` が開く
 - [ ] Neon mainのマイグレーション8件、`funnel_events`、登録関数が存在する
-- [ ] Resend、LINE Login、LINE Messaging、`CRON_SECRET`、`ADMIN_EMAILS`がVercel Productionに設定されている
+- [ ] Resend、LINE Login、LINE Messaging、`CRON_SECRET`、`AUTH_SECRET_PEPPER`、`ADMIN_EMAILS`がVercel Productionに設定されている
+- [ ] `AUTH_EMAIL_EXCEPTIONS`には運営確認用の`s.hasegawa1130@gmail.com`だけが設定され、`EMAIL_FROM`は`mobby.online`の送信元になっている
 - [ ] LINE公式アカウントの友だち追加導線が開く
 - [ ] 本番ではローカルテスト用バイパスを使わない
 - [ ] 運営画面へは`ADMIN_EMAILS`に設定した運営メールだけで入れる
