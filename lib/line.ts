@@ -60,7 +60,9 @@ export async function checkLineFriendship(lineUserId: string) {
   const response = await fetch(`${LINE_BOT_PROFILE_URL}/${encodeURIComponent(lineUserId)}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return response.ok;
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error(`LINE friendship request failed with status ${response.status}.`);
+  return true;
 }
 
 export async function pushLineMessage(lineUserId: string, text: string) {

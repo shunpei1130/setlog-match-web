@@ -159,7 +159,7 @@ function validPreferences() {
 }
 
 test("keeps the MVP free of starter preview artifacts", async () => {
-  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, authEmail, localTest, envExample, iosAuthScreen, migration, profileMigration, fullMigration, authRoute, authVerification, lineRoute, pairRoute, adminPage, cronRoute] = await Promise.all([
+  const [page, layout, packageJson, schema, db, eventRegistration, waitingRoute, registrationRoute, session, schoolEmail, authEmail, localTest, envExample, iosAuthScreen, migration, profileMigration, fullMigration, authRoute, authVerification, lineRoute, lineStatusRoute, pairRoute, adminPage, cronRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -180,6 +180,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
     readFile(new URL("../app/api/auth/verify-code/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/auth-verification.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/line/webhook/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/line/status/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/pairs/[pairId]/decision/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/cron/line-reminder/route.ts", import.meta.url), "utf8"),
@@ -272,6 +273,8 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(authVerification, /AUTH_CODE_MAX_ATTEMPTS/);
   assert.match(authRoute, /setAuthCookie/);
   assert.match(lineRoute, /x-line-signature/);
+  assert.match(lineStatusRoute, /checkLineFriendship/);
+  assert.match(lineStatusRoute, /LINE_MESSAGING_ACCESS_TOKEN/);
   assert.match(pairRoute, /INSTAGRAM_CONTACT_REQUIRED/);
   assert.match(adminPage, /ADMIN_EMAILS|isAdminEmail/);
   assert.match(cronRoute, /onConflictDoNothing/);
