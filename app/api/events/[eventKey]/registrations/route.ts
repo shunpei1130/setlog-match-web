@@ -73,7 +73,8 @@ export async function POST(
   } | null;
   const isLocalTestRequest = isLocalTestHostname(new URL(request.url).hostname);
   const requestedLocalBypass = body?.lineTestBypass === true || body?.schoolEmailTestBypass === true;
-  const localTestBypass = isLocalTestRequest
+  const localTestBypass = process.env.NODE_ENV !== "production"
+    && isLocalTestRequest
     && body?.lineTestBypass === true
     && body?.schoolEmailTestBypass === true;
 

@@ -105,22 +105,23 @@ test("allows only the configured operator email as an auth exception", async () 
   }
 });
 
-test("accepts the LINE bypass only on localhost", async () => {
-  const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true, profile: validProfile(), preferences: validPreferences() });
+test("rejects the local test bypass from the production build", async () => {
+  const body = JSON.stringify({ lineTestBypass: true, schoolEmailTestBypass: true, profile: validProfile(), preferences: validPreferences(), ageConfirmed: true, rulesAccepted: true });
   const localResponse = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
   });
-  assert.equal(localResponse.status, 503);
+  assert.equal(localResponse.status, 401);
+  assert.deepEqual(await localResponse.json(), { error: "AUTH_REQUIRED" });
 
-  const productionResponse = await render("/api/events/next-saturday/registrations", {
+  const publicResponse = await render("/api/events/next-saturday/registrations", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
   }, "set-mob.example");
-  assert.equal(productionResponse.status, 400);
-  assert.deepEqual(await productionResponse.json(), { error: "LOCAL_TEST_BYPASS_NOT_ALLOWED" });
+  assert.equal(publicResponse.status, 400);
+  assert.deepEqual(await publicResponse.json(), { error: "LOCAL_TEST_BYPASS_NOT_ALLOWED" });
 });
 
 test("requires the four profile fields before registration", async () => {
@@ -235,6 +236,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(registrationRoute, /EVENT_FULL/);
   assert.match(registrationRoute, /lineTestBypass/);
   assert.match(registrationRoute, /schoolEmailTestBypass/);
+  assert.match(registrationRoute, /process\.env\.NODE_ENV !== "production"/);
   assert.match(registrationRoute, /PROFILE_REQUIRED/);
   assert.match(registrationRoute, /PROFILE_INVALID/);
   assert.match(registrationRoute, /AUTH_REQUIRED/);
