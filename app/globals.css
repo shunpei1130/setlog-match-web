@@ -440,6 +440,7 @@ h1 em, h2 em { color: var(--accent); font-style: normal; }
 .line-modal__preview strong { font-size: 17px; }
 .line-modal__official-link { display: inline-block; color: var(--ink); font-size: 12px; font-weight: 800; text-decoration: underline; }
 .line-modal .text-button { margin-top: 8px; }
+.line-modal .secondary-button.full-width { margin-top: 10px; }
 
 @media (min-width: 680px) {
   .landing-grid { padding-top: 68px; }

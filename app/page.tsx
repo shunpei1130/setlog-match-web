@@ -348,6 +348,8 @@ export default function Home() {
   const [safetyError, setSafetyError] = useState("");
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [lineConnecting, setLineConnecting] = useState(false);
+  const [lineLinkDetail, setLineLinkDetail] = useState<{ linked: boolean; followed: boolean } | null>(null);
+  const [lineRechecking, setLineRechecking] = useState(false);
   const [participationSubmitting, setParticipationSubmitting] = useState(false);
   const [profileErrors, setProfileErrors] = useState<Partial<Record<ProfileField, string>>>({});
   const [preferenceErrors, setPreferenceErrors] = useState<Partial<Record<PreferenceField, string>>>({});
@@ -431,6 +433,7 @@ export default function Home() {
         if (lineResponse.ok) {
           const line = await lineResponse.json() as { linked?: boolean; followed?: boolean; officialAccountUrl?: unknown };
           if (!cancelled && typeof line.officialAccountUrl === "string") setLineOfficialAccountUrl(line.officialAccountUrl);
+          if (!cancelled) setLineLinkDetail({ linked: Boolean(line.linked), followed: Boolean(line.followed) });
           if (!cancelled) {
             setState((previous) => ({
               ...previous,
@@ -476,7 +479,8 @@ export default function Home() {
       }
       const lineResult = new URLSearchParams(window.location.search).get("line");
       if (!cancelled && lineResult === "linked-not-following") {
-        setState((previous) => ({ ...previous, notice: "LINEを友だち追加してから、もう一度状態を確認してください。" }));
+        setState((previous) => ({ ...previous, notice: "LINEログインは完了しました。あとはset-mobの友だち追加だけです。" }));
+        setLineModalOpen(true);
       } else if (!cancelled && lineResult === "linked") {
         setState((previous) => ({ ...previous, notice: "LINE連携が完了しました。参加登録を続けられます。" }));
       }
@@ -973,6 +977,31 @@ export default function Home() {
       updateState({ notice: "LINE登録の準備に失敗しました。もう一度お試しください。" });
     } finally {
       setLineConnecting(false);
+    }
+  };
+
+  const recheckLineStatus = async () => {
+    setLineRechecking(true);
+    try {
+      const response = await fetch("/api/line/status", { cache: "no-store" });
+      if (!response.ok) throw new Error("LINE status unavailable");
+      const line = await response.json() as { linked?: boolean; followed?: boolean; officialAccountUrl?: unknown };
+      if (typeof line.officialAccountUrl === "string") setLineOfficialAccountUrl(line.officialAccountUrl);
+      setLineLinkDetail({ linked: Boolean(line.linked), followed: Boolean(line.followed) });
+      if (line.linked && line.followed) {
+        setState((previous) => ({
+          ...previous,
+          lineRegistration: { status: "registered", source: "line_live", reminderScheduled: true },
+          notice: "LINE連携が完了しました。参加登録を続けられます。",
+        }));
+        setLineModalOpen(false);
+      } else {
+        updateState({ notice: "まだ友だち追加が確認できません。友だち追加をしてから、もう一度確認してください。" });
+      }
+    } catch {
+      updateState({ notice: "状態を確認できませんでした。通信を確認して、もう一度お試しください。" });
+    } finally {
+      setLineRechecking(false);
     }
   };
 
@@ -1476,8 +1505,8 @@ export default function Home() {
               <div className="line-setup-card__icon">LINE</div>
               <div className="line-setup-card__body">
                 <span className="label">参加に必要です</span>
-                <strong>{state.lineRegistration.status === "registered" ? "LINE連携・友だち追加済み" : "LINEを連携して、金曜の案内を受け取る"}</strong>
-                <p>{state.lineRegistration.status === "registered" ? "金曜21時に、翌日の参加確認をお送りします。" : "参加登録には、LINEへのログインと友だち追加が必要です。"}</p>
+                <strong>{state.lineRegistration.status === "registered" ? "LINE連携・友だち追加済み" : lineLinkDetail?.linked && !lineLinkDetail.followed ? "LINEログイン済み。あとは友だち追加だけです" : "LINEを連携して、金曜の案内を受け取る"}</strong>
+                <p>{state.lineRegistration.status === "registered" ? "金曜21時に、翌日の参加確認をお送りします。" : lineLinkDetail?.linked && !lineLinkDetail.followed ? "set-mobを友だち追加すると、参加登録ができるようになります。" : "参加登録には、LINEへのログインと友だち追加が必要です。"}</p>
               </div>
               {state.lineRegistration.status === "registered" && <span className="line-setup-card__check">✓</span>}
             </div>}
@@ -1601,11 +1630,22 @@ export default function Home() {
           <section className="line-modal" role="dialog" aria-modal="true" aria-labelledby="line-modal-title" onClick={(event) => event.stopPropagation()}>
             <div className="modal-top"><span className="line-modal__mark">LINE</span><button className="close-button" onClick={() => setLineModalOpen(false)} aria-label="LINE登録を閉じる">×</button></div>
             <p className="eyebrow">LINE連携</p>
-            <h2 id="line-modal-title">前日の案内を、<br /><em>LINEで受け取る。</em></h2>
-            <p>参加登録には、LINEへのログインとset-mobの友だち追加が必要です。金曜21時に、翌日の参加確認をお送りします。</p>
-            {lineOfficialAccountUrl && <a className="line-modal__official-link" href={lineOfficialAccountUrl} target="_blank" rel="noreferrer">set-mobを友だち追加する ↗</a>}
-            <div className="line-modal__preview"><span>金曜 21:00</span><strong>明日の土曜、参加しますか？</strong><small>参加する / 今回は見送る</small></div>
-            <button className="primary-button full-width" type="button" onClick={completeLineRegistration} disabled={lineConnecting}>{lineConnecting ? "LINE連携を準備中…" : localTest ? "LINE連携を完了する（デモ）" : "LINEでログインする"}<span>→</span></button>
+            {lineLinkDetail?.linked && !lineLinkDetail.followed && !localTest ? (
+              <>
+                <h2 id="line-modal-title">あとは、<br /><em>友だち追加だけ。</em></h2>
+                <p>LINEログインは完了しています。set-mobを友だち追加すると、参加登録ができるようになります。金曜21時に、翌日の参加確認をお送りします。</p>
+                {lineOfficialAccountUrl && <a className="primary-button full-width" href={lineOfficialAccountUrl} target="_blank" rel="noreferrer">set-mobを友だち追加する<span>↗</span></a>}
+                <button className="secondary-button full-width" type="button" onClick={recheckLineStatus} disabled={lineRechecking}>{lineRechecking ? "状態を確認中…" : "追加したら、状態を確認する"}</button>
+              </>
+            ) : (
+              <>
+                <h2 id="line-modal-title">前日の案内を、<br /><em>LINEで受け取る。</em></h2>
+                <p>参加登録には、LINEへのログインとset-mobの友だち追加が必要です。金曜21時に、翌日の参加確認をお送りします。</p>
+                {lineOfficialAccountUrl && <a className="line-modal__official-link" href={lineOfficialAccountUrl} target="_blank" rel="noreferrer">set-mobを友だち追加する ↗</a>}
+                <div className="line-modal__preview"><span>金曜 21:00</span><strong>明日の土曜、参加しますか？</strong><small>参加する / 今回は見送る</small></div>
+                <button className="primary-button full-width" type="button" onClick={completeLineRegistration} disabled={lineConnecting}>{lineConnecting ? "LINE連携を準備中…" : localTest ? "LINE連携を完了する（デモ）" : "LINEでログインする"}<span>→</span></button>
+              </>
+            )}
           </section>
         </div>
       )}

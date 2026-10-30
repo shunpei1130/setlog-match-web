@@ -25,6 +25,9 @@ export function buildLineLoginUrl(state: string) {
     redirect_uri: redirectUri,
     state,
     scope: "profile openid",
+    // Show the official-account friend-add prompt inside the LINE login
+    // flow, so users do not have to find the friend-add link afterwards.
+    bot_prompt: "aggressive",
   });
   return `${LINE_AUTHORIZE_URL}?${params.toString()}`;
 }
