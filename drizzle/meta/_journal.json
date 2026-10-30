@@ -64,6 +64,13 @@
       "when": 1792657397653,
       "tag": "0008_automatic_pairing",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793334857000,
+      "tag": "0009_cloudy_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

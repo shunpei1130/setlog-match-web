@@ -59,3 +59,14 @@ test("release builds fail closed on missing, local, or shared API origins", () =
   assert.throws(() => validateReleaseConfiguration({ ...valid, EXPO_PUBLIC_REVIEW_API_BASE_URL: "https://SETLOG-MATCH-WEB.vercel.app/" }));
   assert.throws(() => validateReleaseConfiguration({ ...valid, EAS_BUILD: "true" }));
 });
+
+test("matching result messages cover matched and unmatched participants", async () => {
+  const { matchingResultMessage } = await import("../lib/matching-message.ts");
+  const matched = matchingResultMessage(true);
+  assert.match(matched, /マッチングが成立しました/);
+  assert.match(matched, /22:00〜23:00/);
+  const unmatched = matchingResultMessage(false);
+  assert.match(unmatched, /相手がいませんでした/);
+  assert.match(unmatched, /次回土曜/);
+  assert.notEqual(matched, unmatched);
+});

@@ -338,10 +338,28 @@ export const lineReminderDeliveries = pgTable(
   }),
 );
 
+export const lineMatchingDeliveries = pgTable(
+  "line_matching_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    deliveryUnique: uniqueIndex("line_matching_deliveries_event_user_idx").on(table.eventId, table.userId),
+  }),
+);
+
 export const eventsRelations = relations(events, ({ many }) => ({
   registrations: many(eventRegistrations),
   pairs: many(eventPairs),
   lineReminderDeliveries: many(lineReminderDeliveries),
+  lineMatchingDeliveries: many(lineMatchingDeliveries),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -355,6 +373,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   blocksReceived: many(blocks, { relationName: "blocked" }),
   reports: many(safetyReports),
   reminderDeliveries: many(lineReminderDeliveries),
+  matchingDeliveries: many(lineMatchingDeliveries),
   funnelEvents: many(funnelEvents),
 }));
 
