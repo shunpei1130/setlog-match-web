@@ -5,22 +5,22 @@ import { StyleSheet, Text, View } from "react-native";
 export function LandingScreen({ onStart }: { onStart: () => void }) {
   return (
     <View style={styles.container}>
-      <Eyebrow>AOYAMA STUDENTS / SATURDAY</Eyebrow>
-      <Title>知らない誰かの、{`\n`}土曜日を読む。</Title>
+      <Eyebrow>青学生の、土曜日。</Eyebrow>
+      <Title>知らない青学生と、{`\n`}土曜日をシェア。</Title>
       <Lead>
-        連絡先から始めない、青学生限定の一日。毎週土曜、ひとりのDay PairとSetlogで日常を共有します。
+        18歳以上の青学生限定。条件が合ったひとりと、Setlogで一日を共有します。参加は無料です。
       </Lead>
-      <ActionButton onPress={onStart}>次の土曜に事前登録する →</ActionButton>
+      <ActionButton onPress={onStart}>次の土曜に参加する</ActionButton>
       <Card accent>
-        <Text style={styles.cardLabel}>NEXT SATURDAY</Text>
+        <Text style={styles.cardLabel}>次の土曜日</Text>
         <Text style={styles.time}>12:00</Text>
-        <Text style={styles.cardTitle}>一日だけのDay Pair</Text>
-        <Text style={styles.cardCopy}>夜までは連絡先を聞かず、22時にお互いが非公開で選びます。</Text>
+        <Text style={styles.cardTitle}>一日だけ、同じ相手と。</Text>
+        <Text style={styles.cardCopy}>22時になったら、連絡先の交換や翌日も続けるかを選べます。回答は相手に表示されません。</Text>
       </Card>
       <View style={styles.rules}>
-        <Rule number="01" title="青学生限定" body="学校メールで所属を確認します。" />
-        <Rule number="02" title="回答は非公開" body="片方だけの希望や順位は表示しません。" />
-        <Rule number="03" title="いつでも終了できる" body="ブロックと通報は理由の説明なしで使えます。" />
+        <Rule number="01" title="青学生限定" body="大学のメールアドレスで確認します。" />
+        <Rule number="02" title="お互いの希望が合ったときだけ" body="ふたりとも選んだ連絡先だけを交換します。" />
+        <Rule number="03" title="いつでも終了できる" body="相手に理由を説明せず、ブロック・通報できます。" />
       </View>
     </View>
   );

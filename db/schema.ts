@@ -103,6 +103,7 @@ export const lineLoginStates = pgTable(
 export const events = pgTable("events", {
   id: uuid("id").defaultRandom().primaryKey(),
   eventKey: text("event_key").notNull().unique(),
+  kind: text("kind").notNull().default("weekly"),
   startsAt: timestamp("starts_at", { withTimezone: true, mode: "date" }).notNull(),
   status: eventStatus("status").notNull().default("open"),
   capacity: integer("capacity").notNull().default(100),
@@ -162,6 +163,8 @@ export const eventPairs = pgTable(
     status: pairStatus("status").notNull().default("draft"),
     setlogUrl: text("setlog_url"),
     setlogCode: text("setlog_code"),
+    inviteSubmittedBy: uuid("invite_submitted_by").references(() => users.id, { onDelete: "set null" }),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true, mode: "date" }),
     publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
@@ -172,6 +175,33 @@ export const eventPairs = pgTable(
     participantBIndex: index("event_pairs_participant_b_idx").on(table.participantBId),
   }),
 );
+
+export const eventPairMembers = pgTable("event_pair_members", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  pairId: uuid("pair_id").notNull().references(() => eventPairs.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" }),
+}, (table) => ({
+  eventUserUnique: uniqueIndex("event_pair_members_event_user_idx").on(table.eventId, table.userId),
+  pairUserUnique: uniqueIndex("event_pair_members_pair_user_idx").on(table.pairId, table.userId),
+}));
+
+export const matchingRuns = pgTable("matching_runs", {
+  eventId: uuid("event_id").primaryKey().references(() => events.id, { onDelete: "cascade" }),
+  seed: text("seed").notNull(),
+  eligibleCount: integer("eligible_count").notNull(),
+  pairedCount: integer("paired_count").notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+export const pairExtensions = pgTable("pair_extensions", {
+  sourcePairId: uuid("source_pair_id").primaryKey().references(() => eventPairs.id, { onDelete: "cascade" }),
+  targetPairId: uuid("target_pair_id").references(() => eventPairs.id, { onDelete: "set null" }),
+  eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("reserved"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
 
 export const pairDecisions = pgTable(
   "pair_decisions",

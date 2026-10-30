@@ -30,7 +30,7 @@ export default function LegalPage({
         <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
         <p className="legal-lead">{lead}</p>
-        <p className="legal-updated">制定・最終更新：2026年8月13日</p>
+        <p className="legal-updated">最終更新：2026年10月22日</p>
         {sections.map((section) => (
           <section className="legal-section" key={section.title}>
             <h2>{section.title}</h2>

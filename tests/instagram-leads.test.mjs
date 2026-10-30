@@ -11,6 +11,13 @@ test("parses quoted commas and line endings", () => {
   assert.equal(parsed.records[0].aoyama_evidence, "プロフィールに、青学と明記");
 });
 
+test("reports surplus CSV cells instead of validating truncated notes", () => {
+  const parsed = parseCsv('instagram_username,notes\nexample,,important source note\n');
+  assert.equal(parsed.records[0].__columnCount, 3);
+  assert.deepEqual(parsed.records[0].__extraColumns, ["important source note"]);
+  assert(validateLeads(parsed).errors.some(error => error.includes("CSV columns")));
+});
+
 test("accepts a complete eligible DM candidate", () => {
   const parsed = parseCsv([
     "instagram_username,profile_url,display_name,follower_count,follower_count_display,account_type,public_status,aoyama_signal,discovery_channel,source_account,aoyama_evidence,evidence_url,confidence,last_checked_at,adult_service_eligibility,dm_status,owner,notes",

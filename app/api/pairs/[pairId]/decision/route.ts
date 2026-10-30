@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../../db";
 import { getApiAuthUser } from "../../../../../lib/auth";
-import { getPairViewForUser, recordDecision, recordDisclosuresForUser, validateDecision } from "../../../../../lib/pair";
+import { getPairViewForUser, recordDisclosuresForUser, validateDecision } from "../../../../../lib/pair";
+import { LifecycleError, submitPairDecision } from "../../../../../lib/lifecycle";
 import { readVisitorId, recordFunnelEvent } from "../../../../../lib/analytics";
 
 export const runtime = "nodejs";
@@ -22,7 +23,7 @@ export async function POST(
     if (!before || before.status !== "published") return NextResponse.json({ error: "PAIR_NOT_AVAILABLE" }, { status: 404 });
     if (!before.decisionOpen) {
       return NextResponse.json({
-        error: "DECISION_NOT_OPEN",
+        error: Date.now() >= new Date(before.endsAt).getTime() ? "DECISION_CLOSED" : "DECISION_NOT_OPEN",
         decisionOpensAt: before.decisionOpensAt,
       }, { status: 409 });
     }
@@ -32,7 +33,7 @@ export async function POST(
     if (decision.line && !user.lineContact) {
       return NextResponse.json({ error: "LINE_CONTACT_REQUIRED" }, { status: 400 });
     }
-    await recordDecision(db, pairId, user.id, decision);
+    await submitPairDecision(pairId, user.id, decision);
     await recordFunnelEvent(db, request, "decision_submitted", {
       userId: user.id,
       visitorId: readVisitorId(request) ?? user.id,
@@ -45,7 +46,8 @@ export async function POST(
       await recordDisclosuresForUser(db, pairId, user.id, after.result.items);
     }
     return NextResponse.json({ result: after.result, pair: after });
-  } catch {
+  } catch (error) {
+    if (error instanceof LifecycleError) return NextResponse.json({ error: error.code }, { status: error.status });
     return NextResponse.json({ error: "DECISION_UNAVAILABLE" }, { status: 503 });
   }
 }

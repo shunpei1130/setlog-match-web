@@ -15,6 +15,7 @@ export const colors = {
 } as const;
 
 export const layout = StyleSheet.create({
+  focusRing: { outlineWidth: 3, outlineStyle: "solid", outlineColor: colors.accentDark, outlineOffset: 3 },
   shadow: {
     shadowColor: colors.ink,
     shadowOffset: { width: 4, height: 4 },

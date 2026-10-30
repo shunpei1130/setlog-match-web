@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+dist-web/
+.env*
+*.p8
+*.p12
+*.pem
+*.key
+*.mobileprovision
+credentials.json
+*.log
+coverage/

@@ -27,8 +27,8 @@ test("server-renders the set-mob MVP", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>set-mob \| 青学生限定の土曜マッチング<\/title>/i);
-  assert.match(html, /土曜日を準備しています/);
+  assert.match(html, /<title>set-mob \| 青学生と土曜日をシェア<\/title>/i);
+  assert.match(html, /読み込み中/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -198,20 +198,20 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(page, /auth-code/);
   assert.match(page, /PROFILE_REQUIRED/);
   assert.match(page, /SetlogAdapter/);
-  assert.match(page, /青学の知らない人の一日/);
-  assert.match(page, /次の土曜に事前登録する/);
+  assert.match(page, /知らない青学生と/);
+  assert.match(page, /次の土曜に参加する/);
   assert.match(page, /100人限定/);
-  assert.match(page, /残り枠を取得できません/);
+  assert.match(page, /残りの参加枠を確認できません/);
   assert.match(page, /lineTestBypass/);
   assert.match(page, /local_test/);
-  assert.match(page, /金曜21:00/);
+  assert.match(page, /金曜 21:00/);
   assert.match(page, /waiting/);
-  assert.match(page, /土曜のマッチングを開始する/);
+  assert.match(page, /今日の相手を確認する/);
   assert.match(page, /matchingStarted/);
   assert.match(page, /lineRegistration/);
   assert.match(page, /scheduleReminder/);
-  assert.match(page, /LINE登録を完了する/);
-  assert.match(page, /明日はマッチング！/);
+  assert.match(page, /LINE連携を完了する/);
+  assert.match(page, /明日の土曜、参加しますか/);
   assert.match(page, /set-mob-state-v1/);
   assert.match(page, /setlog-match-mvp-state-v4/);
   assert.match(page, /line-modal/);
@@ -231,7 +231,9 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(db, /DATABASE_URL/);
   assert.match(db, /neon-http/);
   assert.match(eventRegistration, /INITIAL_EVENT_CAPACITY = 100/);
-  assert.match(eventRegistration, /register_event_waiting/);
+  const lifecycle = await readFile(new URL("../lib/lifecycle.ts", import.meta.url), "utf8");
+  assert.match(lifecycle, /register_event_waiting/);
+  assert.match(registrationRoute, /reserveQualifiedRegistration/);
   assert.match(waitingRoute, /remaining/);
   assert.match(registrationRoute, /EVENT_FULL/);
   assert.match(registrationRoute, /lineTestBypass/);
@@ -255,7 +257,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(localTest, /localhost/);
   assert.match(localTest, /127\.0\.0\.1/);
   assert.match(page, /local-test-note/);
-  assert.match(page, /テスト参加を開始する/);
+  assert.match(page, /デモに参加する/);
   assert.match(page, /utility-menu/);
   assert.match(page, /menu-button/);
   assert.doesNotMatch(page, /skipLineForLocalTest/);
@@ -286,7 +288,7 @@ test("keeps the MVP free of starter preview artifacts", async () => {
   assert.match(envExample, /LINE_CHANNEL_SECRET=/);
   assert.match(envExample, /CRON_SECRET=/);
   assert.match(layout, /lang="ja"/);
-  assert.match(layout, /set-mob \| 青学生限定の土曜マッチング/);
+  assert.match(layout, /set-mob \| 青学生と土曜日をシェア/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url)));

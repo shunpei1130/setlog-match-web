@@ -1,4 +1,4 @@
-import { ActionButton, Card, Eyebrow, Lead, Title } from "@/components/ui";
+import { ActionButton, Card, Eyebrow, Field, Lead, Title } from "@/components/ui";
 import { SafetyModal } from "@/components/safety-modal";
 import { colors } from "@/theme";
 import type { RemotePair } from "@/types";
@@ -16,6 +16,8 @@ export function PairScreen({
   onDecision,
   onBlock,
   onReport,
+  onSaveInvite,
+  onConfirmJoined,
 }: {
   pair: RemotePair;
   busy: boolean;
@@ -25,9 +27,12 @@ export function PairScreen({
   onDecision: () => void;
   onBlock: () => Promise<void>;
   onReport: (reason: string, detail: string) => Promise<void>;
+  onSaveInvite: (invite: string) => Promise<void>;
+  onConfirmJoined: () => Promise<void>;
 }) {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [invite, setInvite] = useState("");
 
   const copyCode = async () => {
     if (!pair.setlogCode) return;
@@ -38,39 +43,43 @@ export function PairScreen({
   if (setlogOpen) {
     return (
       <View style={styles.container}>
-        <Eyebrow>04 / SETLOG ROOM</Eyebrow>
-        <Title>一日の普通を、{`\n`}見せ合う。</Title>
-        <Lead>12:00から22:00までSetlogで土曜日を共有します。連絡先の話は、夜の判定までしなくて大丈夫です。</Lead>
+        <Eyebrow>Setlogで一日を共有</Eyebrow>
+        <Title>いつもの一日を、{`\n`}見せ合おう。</Title>
+        <Lead>12時から22時まで、Setlogで日常を共有します。連絡先を交換するかは、22時になってから選べます。</Lead>
         <Card accent>
-          <Text style={styles.cardLabel}>TODAY&apos;S ROOM</Text>
+          <Text style={styles.cardLabel}>今日の相手</Text>
           <View style={styles.roomRow}>
             <View style={styles.avatar}><Text style={styles.avatarText}>{pair.candidate.nickname.slice(0, 1)}</Text></View>
             <View style={styles.roomBody}>
               <Text style={styles.roomTitle}>あなた × {pair.candidate.nickname}さん</Text>
-              <Text style={styles.roomMeta}>12:00 — 22:00 / 一日のログ</Text>
+              <Text style={styles.roomMeta}>12:00〜22:00</Text>
             </View>
           </View>
           <View style={styles.codeBox}>
-            <Text style={styles.cardLabel}>参加コード</Text>
-            <Text selectable style={styles.code}>{pair.setlogCode ?? "未設定"}</Text>
+            <Text style={styles.cardLabel}>招待コード</Text>
+            {pair.setlogCode ? <Text selectable style={styles.code}>{pair.setlogCode}</Text> : <Text style={styles.ruleCopy}>{pair.invite?.suggestedCreator ? "Setlogで新しいログを作り、招待コードをここに入力して相手に送りましょう。" : "相手からの招待コードを待っています。あなたがSetlogでログを作って、招待することもできます。"}</Text>}
             {pair.setlogCode ? (
-              <ActionButton variant="secondary" onPress={() => void copyCode()}>{copied ? "コピーしました" : "コードをコピー"}</ActionButton>
+              <ActionButton variant="secondary" onPress={() => void copyCode()}>{copied ? "コピーしました" : "コードをコピーする"}</ActionButton>
             ) : null}
           </View>
           {pair.setlogUrl ? (
-            <ActionButton onPress={() => void Linking.openURL(pair.setlogUrl!)}>Setlogを開く ↗</ActionButton>
+            <ActionButton variant={pair.decisionOpen ? "secondary" : "primary"} onPress={() => void Linking.openURL(pair.setlogUrl!)}>Setlogを開く</ActionButton>
           ) : null}
+          {pair.setlogCode && !pair.invite?.joined ? <ActionButton disabled={busy} variant="secondary" onPress={() => void onConfirmJoined()}>Setlogに参加できました</ActionButton> : null}
+          {pair.invite?.joined ? <Text style={styles.ruleCopy}>参加を確認しました。</Text> : null}
+          {pair.invite?.canEdit ? <View style={styles.codeBox}><Field label={pair.setlogCode ? "招待コードを変更する" : "Setlogの招待リンク・招待コード"} value={invite} onChangeText={setInvite} autoCapitalize="none" autoCorrect={false} placeholder="招待リンクまたは英数字のコード" /><ActionButton variant={pair.setlogCode ? "secondary" : "primary"} disabled={busy || !invite.trim()} onPress={() => void onSaveInvite(invite)}>{busy ? "送信中…" : "招待コードを相手に送る"}</ActionButton></View> : null}
         </Card>
         <Card>
-          <Text style={styles.nextLabel}>NEXT / 22:00</Text>
-          <Text style={styles.nextTitle}>夜に非公開判定</Text>
-          <Text style={styles.nextCopy}>Instagram、LINE、もう一日、何も教えない。回答内容は相手に表示されません。</Text>
+          <Text style={styles.nextLabel}>22時になったら</Text>
+          <Text style={styles.nextTitle}>このあとどうするか、選ぼう。</Text>
+          <Text style={styles.nextCopy}>{pair.kind === "extension" ? "連絡先を交換するか、今回はここで終えるかを選べます。" : "連絡先を交換する、明日も続ける、今回はここで終える、から選べます。"}回答は相手に表示されません。</Text>
         </Card>
         <ActionButton disabled={!pair.decisionOpen} onPress={onDecision}>
-          {pair.decisionOpen ? "夜の判定へ進む →" : "22時から回答できます"}
+          {pair.decisionOpen ? "このあとの希望を選ぶ" : "22時から回答できます"}
         </ActionButton>
-        <ActionButton variant="secondary" onPress={onCloseSetlog}>Day Pairへ戻る</ActionButton>
-        <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったとき・安全メニュー</ActionButton>
+        <ActionButton variant="secondary" onPress={onCloseSetlog}>今日の相手に戻る</ActionButton>
+        <Text style={styles.ruleCopy}>set-mobのブロック・通報では、Setlog側の共有は停止できません。退出・ブロックはSetlogで操作してください。</Text>
+        <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったときは</ActionButton>
         <SafetyModal visible={safetyOpen} busy={busy} onClose={() => setSafetyOpen(false)} onBlock={onBlock} onReport={onReport} />
       </View>
     );
@@ -78,9 +87,9 @@ export function PairScreen({
 
   return (
     <View style={styles.container}>
-      <Eyebrow>04 / TODAY&apos;S DAY PAIR</Eyebrow>
-      <Title>今日の相手は、{`\n`}{pair.candidate.nickname}さん。</Title>
-      <Lead>お互いの条件が合ったため、本日のDay Pairになりました。</Lead>
+      <Eyebrow>今日の相手</Eyebrow>
+      <Title>今日の相手が、{`\n`}決まりました。</Title>
+      <Lead>お互いの希望が合いました。今日はこの方と、Setlogで一日を共有します。</Lead>
       <View style={styles.profile}>
         <View style={styles.avatarLarge}><Text style={styles.avatarLargeText}>{pair.candidate.nickname.slice(0, 1)}</Text></View>
         <View style={styles.profileBody}>
@@ -90,16 +99,17 @@ export function PairScreen({
         </View>
       </View>
       <View style={styles.timeline}>
-        <Timeline time="12:00" title="Day Pair成立" copy="今日の相手だけをお知らせします。" current={false} />
-        <Timeline time="12—22" title="Setlogで共有" copy="連絡先はまだ聞かず、普通の一日を見せ合います。" current />
-        <Timeline time="22:00" title="非公開判定" copy="続けたいものをアプリだけで選びます。" current={false} />
+        <Timeline time="12:00" title="今日の相手をお知らせ" copy="プロフィールを確認できます。" current={false} />
+        <Timeline time="12〜22時" title="Setlogで一日を共有" copy="連絡先の交換を急がず、いつもの日常を見せ合いましょう。" current />
+        <Timeline time="22:00" title="このあとの希望を選ぶ" copy="回答は相手に表示されません。" current={false} />
       </View>
       <Card accent>
-        <Text style={styles.ruleTitle}>このDay Pairは本日23時に終了します。</Text>
-        <Text style={styles.ruleCopy}>続けるかどうかは、夜にお互いが非公開で選択します。</Text>
+        <Text style={styles.ruleTitle}>今日の参加は23時までです。</Text>
+        <Text style={styles.ruleCopy}>22〜23時に、このあとの希望を選んでください。ふたりの回答がそろうと結果をお知らせします。</Text>
       </Card>
-      <ActionButton onPress={onOpenSetlog}>Setlogにつなぐ ↗</ActionButton>
-      <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったとき・安全メニュー</ActionButton>
+      <ActionButton onPress={pair.decisionOpen ? onDecision : onOpenSetlog}>{pair.decisionOpen ? "このあとの希望を選ぶ" : "Setlogで一日を共有する"}</ActionButton>
+      {pair.decisionOpen ? <ActionButton variant="secondary" onPress={onOpenSetlog}>Setlogの参加情報を見る</ActionButton> : null}
+      <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったときは</ActionButton>
       <SafetyModal visible={safetyOpen} busy={busy} onClose={() => setSafetyOpen(false)} onBlock={onBlock} onReport={onReport} />
     </View>
   );

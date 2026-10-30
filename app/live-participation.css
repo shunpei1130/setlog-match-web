@@ -1,0 +1,10 @@
+.live-participation { display: grid; gap: 16px; }
+.live-participation h2 { overflow-wrap: anywhere; }
+.live-participation form, .live-contact { display: grid; gap: 12px; }
+.live-participation input:not([type=checkbox]), .live-participation select, .live-participation textarea { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface); color: var(--ink); font: inherit; }
+.live-participation fieldset { margin: 0; padding: 16px; border: 1px solid var(--line); }
+.live-participation .live-option { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.live-contact { padding-block: 16px; border-block: 1px solid var(--line); }
+.live-contact code { font-size: 22px; overflow-wrap: anywhere; user-select: text; }
+.live-safety summary { min-height: 48px; padding-block: 12px; cursor: pointer; }
+.live-safety[open] { display: grid; gap: 16px; }

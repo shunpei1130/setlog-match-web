@@ -15,9 +15,13 @@ export type PairView = {
   startsAt: string;
   decisionOpensAt: string;
   decisionOpen: boolean;
+  kind: "weekly" | "extension";
+  endsAt: string;
   status: "draft" | "published" | "closed" | "blocked";
   setlogUrl: string | null;
   setlogCode: string | null;
+  invite: { status: "waiting" | "ready"; canEdit: boolean; suggestedCreator: boolean; joined: boolean };
+  extension: { eventKey: string; startsAt: string; status: string; canCancel: boolean } | null;
   candidate: {
     id: string;
     nickname: string;
@@ -34,6 +38,8 @@ type PairRow = {
   id: string;
   eventKey: string;
   startsAt: Date | string;
+  kind: "weekly" | "extension";
+  inviteSubmittedBy: string | null;
   status: PairView["status"];
   setlogUrl: string | null;
   setlogCode: string | null;
@@ -94,7 +100,7 @@ export function validateDecision(input: unknown): PairDecisionInput | null {
 }
 
 async function findPairRow(db: Database, pairId: string): Promise<PairRow | null> {
-  const rows = await db.execute(sqlPairRow(pairId));
+  const { rows } = await db.execute(sqlPairRow(pairId));
   return (rows as unknown as PairRow[])[0] ?? null;
 }
 
@@ -105,6 +111,8 @@ function sqlPairRow(pairId: string) {
       p.id,
       e.event_key AS "eventKey",
       e.starts_at AS "startsAt",
+      e.kind,
+      p.invite_submitted_by AS "inviteSubmittedBy",
       p.status,
       p.setlog_url AS "setlogUrl",
       p.setlog_code AS "setlogCode",
@@ -141,9 +149,13 @@ export async function getPairViewForUser(db: Database, pairId: string, userId: s
   const row = await findPairRow(db, pairId);
   if (!row || (row.participantAId !== userId && row.participantBId !== userId)) return null;
   if (row.status !== "published") return null;
+  const timing = timingForEvent(new Date(row.startsAt));
+  if (Date.now() < new Date(row.startsAt).getTime()) return null;
   const blocked = await db.select({ id: blocks.id }).from(blocks).where(and(
-    eq(blocks.pairId, pairId),
-    or(eq(blocks.blockerUserId, userId), eq(blocks.blockedUserId, userId)),
+    or(
+      and(eq(blocks.blockerUserId, row.participantAId), eq(blocks.blockedUserId, row.participantBId)),
+      and(eq(blocks.blockerUserId, row.participantBId), eq(blocks.blockedUserId, row.participantAId)),
+    ),
   )).limit(1);
   if (blocked.length > 0) return null;
   const decisions = await getDecisionRows(db, pairId);
@@ -158,19 +170,30 @@ export async function getPairViewForUser(db: Database, pairId: string, userId: s
       row,
       userId,
     )
+    : timing.ended
+      ? { kind: "ended", items: [], contacts: null }
     : ownDecision?.answered
       ? { kind: "pending", items: [], contacts: null }
       : null;
-  const timing = timingForEvent(new Date(row.startsAt));
+  const { rows: members } = await db.execute<{ user_id: string; joined_at: string | null }>(sql`SELECT user_id,joined_at FROM event_pair_members WHERE pair_id=${pairId}::uuid`);
+  const { rows: [extension] } = await db.execute<{ eventKey: string; startsAt: string; status: string }>(sql`SELECT e.event_key AS "eventKey",e.starts_at AS "startsAt",x.status
+    FROM pair_extensions x JOIN events e ON e.id=x.event_id WHERE x.source_pair_id=${pairId}::uuid`);
+  const canEdit = !timing.ended && Date.now() < new Date(timing.decisionOpensAt).getTime()
+    && (!row.setlogCode || row.inviteSubmittedBy === userId)
+    && !members.some((member) => member.user_id !== userId && member.joined_at);
   return {
     id: row.id,
     eventKey: row.eventKey,
     startsAt: timing.startsAt,
     decisionOpensAt: timing.decisionOpensAt,
     decisionOpen: timing.decisionOpen,
+    endsAt: timing.endsAt,
+    kind: row.kind,
     status: row.status,
-    setlogUrl: row.setlogUrl,
-    setlogCode: row.setlogCode,
+    setlogUrl: timing.ended ? null : row.setlogUrl,
+    setlogCode: timing.ended ? null : row.setlogCode,
+    invite: { status: row.setlogCode ? "ready" : "waiting", canEdit, suggestedCreator: userId === row.participantAId, joined: Boolean(members.find((member) => member.user_id === userId)?.joined_at) },
+    extension: extension ? { ...extension, startsAt: new Date(extension.startsAt).toISOString(), canCancel: extension.status === "reserved" && Date.now() < new Date(extension.startsAt).getTime() } : null,
     candidate: rowToParticipant(row, userId),
     decision: decisionValues(ownDecision),
     partnerAnswered: Boolean(partnerDecision?.answered),
@@ -179,7 +202,7 @@ export async function getPairViewForUser(db: Database, pairId: string, userId: s
 }
 
 export async function getPublishedPairForUser(db: Database, eventKey: string, userId: string) {
-  const rows = await db.execute(sql`
+  const { rows } = await db.execute(sql`
     SELECT p.id
     FROM event_pairs p
     JOIN events e ON e.id = p.event_id
@@ -195,32 +218,6 @@ export async function getPublishedPairForUser(db: Database, eventKey: string, us
   `);
   const [pair] = rows as unknown as Array<{ id: string }>;
   return pair ? getPairViewForUser(db, pair.id, userId) : null;
-}
-
-export async function recordDecision(db: Database, pairId: string, userId: string, decision: PairDecisionInput) {
-  const [saved] = await db.insert(pairDecisions).values({
-    pairId,
-    userId,
-    instagram: decision.instagram,
-    line: decision.line,
-    continueChoice: decision.continue,
-    none: decision.none,
-    answered: true,
-    answeredAt: new Date(),
-    updatedAt: new Date(),
-  }).onConflictDoUpdate({
-    target: [pairDecisions.pairId, pairDecisions.userId],
-    set: {
-      instagram: decision.instagram,
-      line: decision.line,
-      continueChoice: decision.continue,
-      none: decision.none,
-      answered: true,
-      answeredAt: new Date(),
-      updatedAt: new Date(),
-    },
-  }).returning({ id: pairDecisions.id });
-  if (!saved) throw new Error("Decision could not be saved.");
 }
 
 export async function recordDisclosures(db: Database, pairId: string, row: PairRow, items: Array<"instagram" | "line">) {

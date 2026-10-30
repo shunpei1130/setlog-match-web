@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "AUTH_REQUIRED" }, { status: 401 });
 
   let followed = user.lineFollowed;
-  if (user.lineUserId && process.env.LINE_MESSAGING_ACCESS_TOKEN) {
+  if (process.env.APP_ENV !== "review" && user.lineUserId && process.env.LINE_MESSAGING_ACCESS_TOKEN) {
     try {
       const currentFollowed = await checkLineFriendship(user.lineUserId);
       followed = currentFollowed;

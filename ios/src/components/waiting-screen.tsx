@@ -8,11 +8,13 @@ export function WaitingScreen({
   busy,
   onStart,
   onCancel,
+  onNext,
 }: {
   event: EventState;
   busy: boolean;
   onStart: () => Promise<void>;
   onCancel: () => Promise<void>;
+  onNext?: () => Promise<void>;
 }) {
   const eventDate = new Intl.DateTimeFormat("ja-JP", {
     month: "numeric",
@@ -21,30 +23,32 @@ export function WaitingScreen({
     timeZone: "Asia/Tokyo",
   }).format(new Date(event.startsAt));
 
+  if (event.matchingStatus === "unmatched") return <View style={styles.container}><Eyebrow>今回の参加</Eyebrow><Title style={styles.unmatchedTitle}>今回は相手が{`\n`}見つかりませんでした。</Title><Lead>お互いの希望が合う相手がいなかったため、今回の参加は終了しました。また次の土曜に参加できます。</Lead>{onNext ? <ActionButton disabled={busy} onPress={() => void onNext()}>次の土曜の参加を確認する</ActionButton> : null}</View>;
+
   return (
     <View style={styles.container}>
-      <Eyebrow>03 / RESERVED</Eyebrow>
-      <Title>次の土曜を、{`\n`}待っています。</Title>
-      <Lead>参加枠を確保しました。運営がDay Pairを公開すると、ここから今日の相手を確認できます。</Lead>
+      <Eyebrow>参加登録が完了しました</Eyebrow>
+      <Title>{event.kind === "extension" ? "日曜日も、" : "土曜日の12時を、"}{`\n`}{event.kind === "extension" ? "同じ相手と。" : "お楽しみに。"}</Title>
+      <Lead>{event.kind === "extension" ? "ふたりとも続けることを希望したので、同じ相手との日曜の参加を予約しました。" : "お互いの希望が合う相手がいれば、開始時刻にお知らせします。"}</Lead>
       <Card accent>
         <View style={styles.cardHeader}>
-          <Text style={styles.status}>● 事前登録済み</Text>
+          <Text style={styles.status}>● 参加登録済み</Text>
           <Text style={styles.issue}>{eventDate}</Text>
         </View>
         <Text style={styles.time}>12:00</Text>
-        <Text style={styles.timeLabel}>マッチング開始</Text>
+        <Text style={styles.timeLabel}>{event.kind === "extension" ? "同じ相手と、もう一日" : "今日の相手をお知らせ"}</Text>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>金曜21:00にLINEで案内</Text>
-          <Text style={styles.sectionCopy}>「明日はマッチング！」と参加確認をお送りします。</Text>
+          <Text style={styles.sectionTitle}>{event.kind === "extension" ? "Setlogは、そのままで" : "金曜21時にLINEでご案内"}</Text>
+          <Text style={styles.sectionCopy}>{event.kind === "extension" ? "同じSetlogのログと招待コードを使います。" : "連携したLINEに、土曜の参加案内が届きます。"}</Text>
         </View>
-        <View style={styles.section}>
-          <Text style={styles.countLabel}>初回募集 / {event.capacity}人限定</Text>
+        {event.kind !== "extension" ? <View style={styles.section}>
+          <Text style={styles.countLabel}>定員{event.capacity}人</Text>
           <Text style={styles.count}>残り {event.remaining} 枠</Text>
-          <Text style={styles.sectionCopy}>現在{event.count}人が次回土曜に参加予定です。</Text>
-        </View>
+          <Text style={styles.sectionCopy}>現在{event.count}人が参加登録しています。</Text>
+        </View> : null}
       </Card>
       <BusyButton busy={busy} busyLabel="ペアを確認中…" onPress={() => void onStart()}>
-        土曜のマッチングを開始する →
+        今日の相手を確認する
       </BusyButton>
       {event.canCancel ? (
         <ActionButton
@@ -52,16 +56,17 @@ export function WaitingScreen({
           variant="secondary"
           onPress={() => void onCancel()}
         >
-          {busy ? "処理中…" : "今回の参加をキャンセル"}
+          {busy ? "キャンセル中…" : "今回の参加をキャンセルする"}
         </ActionButton>
       ) : null}
-      <Text style={styles.note}>ペアが未公開の場合は、この画面でそのままお待ちください。</Text>
+      <Text style={styles.note}>{event.matchingStatus === "processing" ? "お互いの希望が合う相手を探しています。少し待ってから、もう一度確認してください。" : "開始時刻になると、自動で参加状況を確認します。"}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { paddingTop: 28 },
+  unmatchedTitle: { fontSize: 32, lineHeight: 38 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
   status: { color: colors.success, fontSize: 11, fontWeight: "900" },
   issue: { color: colors.inkSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1 },

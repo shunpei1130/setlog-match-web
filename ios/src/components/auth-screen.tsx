@@ -1,7 +1,7 @@
 import { ActionButton, BusyButton, Card, Eyebrow, Field, Lead, Notice, Title } from "@/components/ui";
 import { ApiError, mobileApi } from "@/lib/api";
 import { colors } from "@/theme";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 const EMAIL_ADDRESS_PATTERN = /^[^@\s]+@[^@\s]+$/i;
@@ -20,6 +20,13 @@ export function AuthScreen({
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [resendSeconds, setResendSeconds] = useState(0);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timeout = setTimeout(() => setResendSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => clearTimeout(timeout);
+  }, [resendSeconds]);
 
   const requestCode = async () => {
     const normalized = email.trim().toLowerCase();
@@ -32,13 +39,15 @@ export function AuthScreen({
     try {
       const result = await mobileApi.requestCode(normalized);
       setSent(true);
+      setResendSeconds(result.retryAfter ?? 60);
+      if (!result.retryAfter) setCode("");
       setMessage(result.retryAfter
-        ? `すでに送信済みです。${result.retryAfter}秒後に再送できます。`
+        ? `認証コードは送信済みです。${result.retryAfter}秒後にもう一度送れます。`
         : "6桁の認証コードを送信しました。");
     } catch (error) {
       setMessage(error instanceof ApiError && error.code === "AOYAMA_EMAIL_REQUIRED"
-        ? "登録対象のメールアドレスを確認してください。"
-        : "認証コードを送信できませんでした。");
+        ? "青学のメールアドレスを入力してください。"
+        : "認証コードを送れませんでした。時間をおいて、もう一度お試しください。");
     } finally {
       setSending(false);
     }
@@ -46,20 +55,20 @@ export function AuthScreen({
 
   return (
     <View style={styles.container}>
-      <Eyebrow>01 / SCHOOL EMAIL</Eyebrow>
-      <Title>青学生であることを、{`\n`}メールで確認。</Title>
-      <Lead>大学のメールアドレスへ6桁のコードを送ります。パスワードは使いません。</Lead>
+      <Eyebrow>大学メールで確認</Eyebrow>
+      <Title>青学のメールで、{`\n`}はじめよう。</Title>
+      <Lead>大学のメールアドレスに6桁の認証コードを送ります。パスワードは不要です。</Lead>
       {message ? <Notice>{message}</Notice> : null}
       <Card>
         <Field
-          label="登録メールアドレス"
+          label="大学のメールアドレス"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
-          placeholder="name@example.com"
+          placeholder="name@aoyama.jp"
           value={email}
           onChangeText={setEmail}
-          editable={!sent}
+          editable={!sent && !busy && !sending}
         />
         {sent ? (
           <Field
@@ -74,18 +83,26 @@ export function AuthScreen({
         ) : null}
         {sent ? (
           <BusyButton
-            busy={busy}
+            busy={busy || sending}
             busyLabel="確認中…"
             disabled={code.length !== 6}
             onPress={() => void onVerify(email.trim().toLowerCase(), code)}
-          >認証して続ける →</BusyButton>
+          >確認して次へ進む</BusyButton>
         ) : (
           <BusyButton busy={sending} busyLabel="送信中…" onPress={() => void requestCode()}>
             認証コードを送る
           </BusyButton>
         )}
+        {sent ? <>
+          <ActionButton
+            variant="secondary"
+            disabled={busy || sending || resendSeconds > 0}
+            onPress={() => void requestCode()}
+          >{sending ? "送信中…" : resendSeconds > 0 ? `あと${resendSeconds}秒で再送できます` : "認証コードをもう一度送る"}</ActionButton>
+          <ActionButton variant="secondary" disabled={busy || sending} onPress={() => { setSent(false); setCode(""); setMessage(null); setResendSeconds(0); }}>メールアドレスを変更する</ActionButton>
+        </> : null}
       </Card>
-      <Text style={styles.privacy}>認証済みメールは所属確認と運営連絡にのみ使用します。</Text>
+      <Text style={styles.privacy}>メールアドレスは、青学生であることの確認と運営からの連絡に使います。</Text>
       <ActionButton variant="secondary" onPress={onBack}>最初の画面へ戻る</ActionButton>
     </View>
   );

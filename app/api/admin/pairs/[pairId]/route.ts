@@ -4,6 +4,7 @@ import { getDb } from "../../../../../db";
 import { eventPairs, eventRegistrations } from "../../../../../db/schema";
 import { getCurrentAuthUser, isAdminEmail } from "../../../../../lib/auth";
 import { arePairPreferencesCompatible, type GenderPreference, type MatchPurpose, type ProfileGender } from "../../../../../lib/profile";
+import { closePairByAdmin } from "../../../../../lib/lifecycle";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,11 @@ export async function PATCH(
     const db = getDb();
     const existing = await db.query.eventPairs.findFirst({ where: eq(eventPairs.id, pairId) });
     if (!existing) return NextResponse.json({ error: "PAIR_NOT_FOUND" }, { status: 404 });
+    if (action === "block" || action === "close") {
+      await closePairByAdmin(pairId, action === "block" ? "blocked" : "closed");
+      return NextResponse.json({ pair: await db.query.eventPairs.findFirst({ where: eq(eventPairs.id, pairId) }) });
+    }
+    if (existing.finalizedAt) return NextResponse.json({ error: "PAIR_FINALIZED" }, { status: 409 });
 
     const hasSetlogUrl = Object.prototype.hasOwnProperty.call(body ?? {}, "setlogUrl");
     const hasSetlogCode = Object.prototype.hasOwnProperty.call(body ?? {}, "setlogCode");
@@ -113,9 +119,6 @@ export async function PATCH(
       return NextResponse.json({ pair });
     }
 
-    if (action === "publish" && (!setlogUrl || !setlogCode)) {
-      return NextResponse.json({ error: "SETLOG_ACCESS_REQUIRED" }, { status: 400 });
-    }
     if (action === "publish" && existing.status === "blocked") {
       return NextResponse.json({ error: "PAIR_BLOCKED" }, { status: 409 });
     }

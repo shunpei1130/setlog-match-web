@@ -13,8 +13,9 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (process.env.APP_ENV === "review") return NextResponse.json({ sent: 0, attempted: 0 });
     const db = getDb();
-    const rows = await db.execute(sql`
+    const { rows } = await db.execute<{ eventId: string; userId: string; lineUserId: string }>(sql`
       SELECT e.id AS "eventId", r.user_id AS "userId", u.line_user_id AS "lineUserId"
       FROM events e
       JOIN event_registrations r ON r.event_id = e.id
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
         AND u.line_followed = true
         AND u.line_user_id IS NOT NULL
         AND d.id IS NULL
-    `) as unknown as Array<{ eventId: string; userId: string; lineUserId: string }>;
+    `);
     let sent = 0;
     for (const row of rows) {
       const [claim] = await db.insert(lineReminderDeliveries)

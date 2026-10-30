@@ -1,6 +1,6 @@
 const callbackMessages: Record<string, string> = {
   linked: "LINE連携が完了しました。",
-  "linked-not-following": "LINE連携は完了しました。公式アカウントを友だち追加してください。",
+  "linked-not-following": "LINE連携が完了しました。set-mobの公式アカウントを友だち追加してください。",
   "already-linked": "このLINEアカウントは別の利用者に連携されています。",
   cancelled: "LINE連携をキャンセルしました。",
   expired: "LINE連携の有効期限が切れました。もう一度お試しください。",

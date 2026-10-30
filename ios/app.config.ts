@@ -1,4 +1,7 @@
 import type { ExpoConfig } from "expo/config";
+import { validateReleaseConfiguration } from "./release-config.cjs";
+
+const release = validateReleaseConfiguration(process.env);
 
 const config: ExpoConfig = {
   name: "set-mob",
@@ -11,12 +14,15 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: "jp.setlog.match",
     supportsTablet: false,
+    deploymentTarget: "17.6",
     config: { usesNonExemptEncryption: false },
-    infoPlist: {
+    infoPlist: release ? {} : {
       NSLocalNetworkUsageDescription: "開発中に同じWi-Fi上のAPIへ接続します。",
       NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
     },
   },
+  owner: process.env.EXPO_ACCOUNT_OWNER || undefined,
+  extra: process.env.EAS_PROJECT_ID ? { eas: { projectId: process.env.EAS_PROJECT_ID } } : {},
   web: {
     output: "static",
     favicon: "./assets/images/set-mob-icon.png",

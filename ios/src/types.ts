@@ -38,8 +38,12 @@ export type EventRegistration = {
 };
 
 export type EventState = {
+  kind?: "weekly" | "extension";
+  matchingStatus?: "scheduled" | "processing" | "matched" | "unmatched" | "ended";
+  endsAt?: string;
   eventKey: string;
   registration: EventRegistration | null;
+  previousRegistration?: EventRegistration | null;
   count: number;
   capacity: number;
   remaining: number;
@@ -69,6 +73,10 @@ export type PairResult = {
 };
 
 export type RemotePair = {
+  kind?: "weekly" | "extension";
+  endsAt?: string;
+  invite?: { status: "waiting" | "ready"; canEdit: boolean; suggestedCreator: boolean; joined: boolean };
+  extension?: { eventKey: string; startsAt: string; status: string; canCancel: boolean } | null;
   id: string;
   eventKey: string;
   startsAt: string;

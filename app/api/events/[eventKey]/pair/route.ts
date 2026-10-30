@@ -4,6 +4,7 @@ import { getApiAuthUser } from "../../../../../lib/auth";
 import { ensureEvent } from "../../../../../lib/event-registration";
 import { getPublishedPairForUser } from "../../../../../lib/pair";
 import { readVisitorId, recordFunnelEvent } from "../../../../../lib/analytics";
+import { ensureAutomaticMatching } from "../../../../../lib/lifecycle";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,7 @@ export async function GET(
   try {
     const db = getDb();
     const event = await ensureEvent(db, eventKey);
+    await ensureAutomaticMatching(event.id);
     const pair = await getPublishedPairForUser(db, event.eventKey, user.id);
     if (!pair) return NextResponse.json({ error: "PAIR_NOT_PUBLISHED" }, { status: 404 });
     await recordFunnelEvent(db, request, "event_activated", {

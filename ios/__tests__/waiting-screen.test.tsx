@@ -39,7 +39,7 @@ describe("待機画面", () => {
     );
 
     expect(screen.getByText("8/15(土)")).toBeTruthy();
-    await fireEvent.press(screen.getByText("今回の参加をキャンセル"));
+    await fireEvent.press(screen.getByText("今回の参加をキャンセルする"));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -48,6 +48,6 @@ describe("待機画面", () => {
       <WaitingScreen event={event({ canCancel: false })} busy={false} onStart={jest.fn()} onCancel={jest.fn()} />,
     );
 
-    expect(screen.queryByText("今回の参加をキャンセル")).toBeNull();
+    expect(screen.queryByText("今回の参加をキャンセルする")).toBeNull();
   });
 });

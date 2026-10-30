@@ -42,9 +42,9 @@ export function currentWeeklyEventSchedule(now = new Date()): EventSchedule {
 export function scheduleForEventKey(eventKey: string, now = new Date()): EventSchedule {
   if (eventKey === NEXT_EVENT_ALIAS) return currentWeeklyEventSchedule(now);
 
-  const match = /^sat-(\d{4})-(\d{2})-(\d{2})$/.exec(eventKey);
+  const match = /^(sat|sun)-(\d{4})-(\d{2})-(\d{2})$/.exec(eventKey);
   if (!match) throw new Error("EVENT_KEY_INVALID");
-  const [, yearText, monthText, dayText] = match;
+  const [, kind, yearText, monthText, dayText] = match;
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
@@ -54,20 +54,23 @@ export function scheduleForEventKey(eventKey: string, now = new Date()): EventSc
     jst.getUTCFullYear() !== year
     || jst.getUTCMonth() + 1 !== month
     || jst.getUTCDate() !== day
-    || jst.getUTCDay() !== 6
+    || jst.getUTCDay() !== (kind === "sun" ? 0 : 6)
   ) throw new Error("EVENT_KEY_INVALID");
-  return scheduleFromStart(startsAt);
+  return { ...scheduleFromStart(startsAt), eventKey };
 }
 
 export function timingForEvent(startsAt: Date, now = new Date()) {
   const registrationClosesAt = startsAt;
   const decisionOpensAt = new Date(startsAt.getTime() + DECISION_DELAY_MS);
+  const endsAt = new Date(startsAt.getTime() + 11 * 60 * 60 * 1000);
   return {
     startsAt: startsAt.toISOString(),
     registrationClosesAt: registrationClosesAt.toISOString(),
     decisionOpensAt: decisionOpensAt.toISOString(),
+    endsAt: endsAt.toISOString(),
     registrationOpen: now < registrationClosesAt,
     canCancel: now < startsAt,
-    decisionOpen: now >= decisionOpensAt,
+    decisionOpen: now >= decisionOpensAt && now < endsAt,
+    ended: now >= endsAt,
   };
 }

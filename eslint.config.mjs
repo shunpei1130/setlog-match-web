@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     ".wrangler/**",
     ".git/**",
     "ios/dist/**",
+    "ios/dist-web/**",
+    "outputs/**",
     "ios/.expo/**",
     "next-env.d.ts",
   ]),

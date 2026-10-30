@@ -7,6 +7,7 @@ import { verifyAuthenticationCode } from "../../../../lib/auth-verification";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (process.env.APP_ENV === "review") return new Response("Not found", { status: 404 });
   const body = await request.json().catch(() => null) as { email?: unknown; code?: unknown } | null;
   try {
     const result = await verifyAuthenticationCode(body?.email, body?.code);

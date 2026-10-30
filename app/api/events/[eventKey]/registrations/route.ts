@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
-import { eventRegistrations, users } from "../../../../../db/schema";
 import { getApiAuthUser } from "../../../../../lib/auth";
 import { isAllowedAuthEmail } from "../../../../../lib/auth-email";
-import { cancelEventRegistration, ensureEvent, eventState, getWaitingCount, recordLocalTestRegistration, reserveEventRegistration } from "../../../../../lib/event-registration";
+import { ensureEvent, eventState, getWaitingCount, recordLocalTestRegistration } from "../../../../../lib/event-registration";
+import { cancelParticipation, LifecycleError, reserveQualifiedRegistration } from "../../../../../lib/lifecycle";
 import { isLocalTestHostname } from "../../../../../lib/local-test";
 import { validateContactHandles, validateRegistrationPreferences, validateRegistrationProfile } from "../../../../../lib/profile";
 import { getOrCreateSessionId, setSessionCookie } from "../../../../../lib/session";
@@ -24,7 +23,7 @@ export async function GET(
     const event = await ensureEvent(db, eventKey);
     const [registration, count] = await Promise.all([
       db.query.eventRegistrations.findFirst({
-        where: (row, operators) => and(
+        where: (row, operators) => operators.and(
           operators.eq(row.eventId, event.id),
           operators.eq(row.userId, user.id),
         ),
@@ -50,7 +49,8 @@ export async function GET(
       remaining: Math.max(0, event.capacity - count),
       updatedAt: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof LifecycleError) return NextResponse.json({ error: error.code }, { status: error.status });
     return NextResponse.json({ error: "REGISTRATION_UNAVAILABLE" }, { status: 503 });
   }
 }
@@ -126,6 +126,7 @@ export async function POST(
     const db = getDb();
     const event = await ensureEvent(db, eventKey);
     const timing = eventState(event);
+    if (event.kind === "extension") return NextResponse.json({ error: "EXTENSION_INVITE_ONLY" }, { status: 403 });
     if (!timing.registrationOpen) {
       return NextResponse.json({ error: "EVENT_REGISTRATION_CLOSED", ...timing }, { status: 409 });
     }
@@ -134,31 +135,9 @@ export async function POST(
       : await getOrCreateSessionId();
     const { sessionId, shouldSetCookie } = session;
     const userId = currentUser?.id ?? null;
-    if (currentUser) {
-      await db.update(users).set({
-        instagramHandle: contactValidation.contacts.instagramHandle,
-        lineContact: contactValidation.contacts.lineContact,
-        updatedAt: new Date(),
-      }).where(eq(users.id, currentUser.id));
-    }
     const reservation = localTestBypass
       ? await recordLocalTestRegistration(db, event.id, sessionId, userId, profileValidation.profile, preferenceValidation.preferences)
-      : await reserveEventRegistration(db, event.id, sessionId, currentUser!.id, profileValidation.profile, preferenceValidation.preferences);
-    if (currentUser) {
-      const registration = await db.query.eventRegistrations.findFirst({
-        where: (eventRegistration, operators) => and(
-          operators.eq(eventRegistration.eventId, event.id),
-          operators.eq(eventRegistration.userId, currentUser.id),
-        ),
-      });
-      if (registration) await db.update(eventRegistrations).set({
-        userId: currentUser.id,
-        lineStatus: "registered",
-        ageConfirmedAt: new Date(),
-        rulesAcceptedAt: new Date(),
-        updatedAt: new Date(),
-      }).where(eq(eventRegistrations.id, registration.id));
-    }
+      : await reserveQualifiedRegistration(event.id, sessionId, currentUser!.id, profileValidation.profile, preferenceValidation.preferences, contactValidation.contacts);
     const now = new Date();
     const response = NextResponse.json({
       ...timing,
@@ -187,7 +166,8 @@ export async function POST(
 
     if (shouldSetCookie) setSessionCookie(response, sessionId);
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof LifecycleError) return NextResponse.json({ error: error.code }, { status: error.status });
     return NextResponse.json({ error: "REGISTRATION_UNAVAILABLE" }, { status: 503 });
   }
 }
@@ -207,7 +187,7 @@ export async function DELETE(
     if (!timing.canCancel) {
       return NextResponse.json({ error: "REGISTRATION_CANCELLATION_CLOSED", ...timing }, { status: 409 });
     }
-    const cancelled = await cancelEventRegistration(db, event.id, user.id);
+    const cancelled = await cancelParticipation(event.id, user.id);
     const count = await getWaitingCount(db, event.id);
     return NextResponse.json({
       ...timing,
@@ -217,7 +197,8 @@ export async function DELETE(
       remaining: Math.max(0, event.capacity - count),
       updatedAt: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof LifecycleError) return NextResponse.json({ error: error.code }, { status: error.status });
     return NextResponse.json({ error: "REGISTRATION_UNAVAILABLE" }, { status: 503 });
   }
 }

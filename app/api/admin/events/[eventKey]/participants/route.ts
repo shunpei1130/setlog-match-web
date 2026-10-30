@@ -21,7 +21,7 @@ export async function GET(
   try {
     const db = getDb();
     const event = await ensureEvent(db, eventKey);
-    const rows = await db.execute(sql`
+    const { rows } = await db.execute(sql`
       SELECT
         r.user_id AS "userId",
         u.email,

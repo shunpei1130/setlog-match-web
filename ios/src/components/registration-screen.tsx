@@ -12,7 +12,7 @@ import {
 } from "@/components/ui";
 import { clearRegistrationDraft, readRegistrationDraft, saveRegistrationDraft } from "@/lib/storage";
 import { colors } from "@/theme";
-import type { LineStatus, MobileUser, RegistrationInput } from "@/types";
+import type { EventRegistration, LineStatus, MobileUser, RegistrationInput } from "@/types";
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -62,6 +62,7 @@ export function RegistrationScreen({
   user,
   line,
   busy,
+  initialProfile,
   onConnectLine,
   onRefresh,
   onRegister,
@@ -69,11 +70,19 @@ export function RegistrationScreen({
   user: MobileUser;
   line: LineStatus | null;
   busy: boolean;
+  initialProfile?: EventRegistration | null;
   onConnectLine: () => Promise<void>;
   onRefresh: () => Promise<void>;
   onRegister: (input: RegistrationInput) => Promise<boolean>;
 }) {
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [draft, setDraft] = useState<Draft>(() => ({
+    ...emptyDraft,
+    ...(initialProfile ? {
+      nickname: initialProfile.nickname ?? "", faculty: initialProfile.faculty ?? "",
+      academicYear: initialProfile.academicYear ?? "", gender: initialProfile.gender ?? "",
+      purpose: initialProfile.purpose, preferredGender: initialProfile.preferredGender,
+    } : {}),
+  }));
   const [instagramHandle, setInstagramHandle] = useState(user.instagramHandle ?? "");
   const [lineContact, setLineContact] = useState(user.lineContact ?? "");
   const [hydrated, setHydrated] = useState(false);
@@ -102,7 +111,7 @@ export function RegistrationScreen({
     const faculty = draft.faculty.trim();
     const instagram = instagramHandle.trim().replace(/^@/, "");
     if (!nickname || !faculty || !draft.academicYear || !draft.gender || !draft.purpose || !draft.preferredGender) {
-      setError("プロフィール、利用目的、希望する相手をすべて入力してください。");
+      setError("プロフィールと、参加の目的・相手の性別の希望を入力してください。");
       return;
     }
     if (nickname.length > 20 || faculty.length > 40) {
@@ -118,11 +127,11 @@ export function RegistrationScreen({
       return;
     }
     if (!draft.ageConfirmed || !draft.rulesAccepted) {
-      setError("年齢確認と安全ルールへの同意が必要です。");
+      setError("18歳以上であることと、安全ルールへの同意を確認してください。");
       return;
     }
     if (!line?.linked || !line.followed) {
-      setError("LINE Loginと公式アカウントの友だち追加を完了してください。");
+      setError("LINEを連携し、set-mobの公式アカウントを友だち追加してください。");
       return;
     }
     const success = await onRegister({
@@ -148,13 +157,13 @@ export function RegistrationScreen({
 
   return (
     <View style={styles.container}>
-      <Eyebrow>02 / PRE-REGISTRATION</Eyebrow>
-      <Title>次の土曜を、{`\n`}準備する。</Title>
-      <Lead>相手に表示する最低限のプロフィールと、相互同意した場合だけ開示する連絡先を登録します。</Lead>
+      <Eyebrow>参加登録</Eyebrow>
+      <Title>土曜に向けて、{`\n`}あなたのことを。</Title>
+      <Lead>プロフィールと相手の希望を教えてください。連絡先は、ふたりとも交換を希望した場合だけ相手に表示されます。</Lead>
       {error ? <Notice onDismiss={() => setError(null)}>{error}</Notice> : null}
 
       <Card accent>
-        <Text style={styles.verifiedLabel}>VERIFIED SCHOOL EMAIL</Text>
+        <Text style={styles.verifiedLabel}>確認済みの大学メール</Text>
         <Text style={styles.verifiedEmail}>{user.email}</Text>
       </Card>
 
@@ -164,57 +173,57 @@ export function RegistrationScreen({
         <Field label="学部（必須）" value={draft.faculty} maxLength={40} placeholder="例：経済学部" onChangeText={(value) => update("faculty", value)} />
         <OptionGrid label="学年（必須）" options={years} value={draft.academicYear} onChange={(value) => update("academicYear", value)} />
         <OptionGrid label="性別（必須）" options={genders} value={draft.gender} onChange={(value) => update("gender", value)} />
-        <OptionGrid label="利用目的（必須）" options={purposes} value={draft.purpose} onChange={(value) => update("purpose", value)} />
-        <OptionGrid label="希望する相手（必須）" options={preferredGenders} value={draft.preferredGender} onChange={(value) => update("preferredGender", value)} />
-        <Text style={styles.sectionCopy}>目的と相手の希望が双方で一致する組み合わせだけを運営が作成します。</Text>
+        <OptionGrid label="参加の目的（必須）" options={purposes} value={draft.purpose} onChange={(value) => update("purpose", value)} />
+        <OptionGrid label="相手の性別の希望（必須）" options={preferredGenders} value={draft.preferredGender} onChange={(value) => update("preferredGender", value)} />
+        <Text style={styles.sectionCopy}>お互いの希望が合う相手を紹介します。条件に合う相手がいない場合は、今回は参加できないことがあります。</Text>
       </Card>
 
       <Card>
         <Text style={styles.sectionTitle}>連絡先（任意）</Text>
-        <Text style={styles.sectionCopy}>夜にお互いが同じ項目を選んだ場合だけ開示します。</Text>
-        <Field label="Instagram" autoCapitalize="none" placeholder="setlog_user" value={instagramHandle} onChangeText={setInstagramHandle} />
+        <Text style={styles.sectionCopy}>22時に、交換したい連絡先を選べます。ふたりとも選んだものだけを交換します。</Text>
+        <Field label="Instagramのユーザーネーム" autoCapitalize="none" placeholder="例：your_name" value={instagramHandle} onChangeText={setInstagramHandle} />
         <Field label="LINEの連絡先" autoCapitalize="none" placeholder="LINE IDなど" value={lineContact} onChangeText={setLineContact} />
       </Card>
 
       <Card accent>
-        <Text style={styles.sectionTitle}>LINE登録</Text>
-        <Text style={styles.sectionCopy}>金曜21:00の参加案内を受け取るため、LINE Loginと友だち追加が必要です。</Text>
+        <Text style={styles.sectionTitle}>LINEで参加案内を受け取る</Text>
+        <Text style={styles.sectionCopy}>金曜21時に案内を送ります。LINE連携と、set-mobの公式アカウントの友だち追加が必要です。</Text>
         <View style={styles.lineStatus}>
           <View style={styles.lineBadge}><Text style={styles.lineBadgeText}>LINE</Text></View>
           <View style={styles.lineStatusBody}>
-            <Text style={styles.lineStatusTitle}>{line?.linked ? "LINE Login済み" : "LINE Login未完了"}</Text>
-            <Text style={styles.lineStatusCopy}>{line?.followed ? "公式アカウント友だち追加済み" : "公式アカウントの友だち追加が必要です"}</Text>
+            <Text style={styles.lineStatusTitle}>{line?.linked ? "LINE連携済み" : "LINE未連携"}</Text>
+            <Text style={styles.lineStatusCopy}>{line?.followed ? "友だち追加済み" : "set-mobの公式アカウントを友だち追加してください"}</Text>
           </View>
         </View>
         {!line?.linked ? (
           <BusyButton busy={busy} busyLabel="LINEを開いています…" onPress={() => void onConnectLine()}>
-            LINE Loginを始める
+            LINEを連携する
           </BusyButton>
         ) : null}
         {line?.linked && !line.followed && line.officialAccountUrl ? (
           <ActionButton variant="secondary" onPress={() => void Linking.openURL(line.officialAccountUrl!)}>
-            公式アカウントを友だち追加 ↗
+            set-mobを友だち追加する
           </ActionButton>
         ) : null}
         {line?.linked && !line.followed ? (
-          <ActionButton variant="secondary" onPress={() => void onRefresh()}>友だち追加の状態を再確認</ActionButton>
+          <ActionButton variant="secondary" onPress={() => void onRefresh()}>友だち追加を確認する</ActionButton>
         ) : null}
       </Card>
 
       <CheckRow
         checked={draft.ageConfirmed}
         title="18歳以上です"
-        description="本サービスは18歳以上の青学生を対象としています。"
+        description="18歳以上の青学生が参加できます。"
         onPress={() => update("ageConfirmed", !draft.ageConfirmed)}
       />
       <CheckRow
         checked={draft.rulesAccepted}
         title="安全ルールに同意します"
-        description="勧誘、金銭要求、嫌がらせを行わず、相手の終了判断を尊重します。"
+        description="勧誘・金銭の要求・嫌がらせをせず、相手が終了を選んだときは尊重します。"
         onPress={() => update("rulesAccepted", !draft.rulesAccepted)}
       />
       <BusyButton busy={busy} busyLabel="保存中…" onPress={() => void submit()}>
-        参加登録を完了する →
+        参加登録を完了する
       </BusyButton>
     </View>
   );

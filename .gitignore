@@ -30,6 +30,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!ios/.env.example
 
 # vercel
 .vercel
@@ -39,9 +41,13 @@ next-env.d.ts
 *.tsbuildinfo
 /dist/
 /ios/dist/
+/ios/dist-web/
 /ios/.expo/
 /.wrangler/
-/outputs/
+/outputs/*
+!/outputs/01a16415-551a-7d00-aa9e-5d433832d204/
+/outputs/01a16415-551a-7d00-aa9e-5d433832d204/*
+!/outputs/01a16415-551a-7d00-aa9e-5d433832d204/営業リスト.xlsx
 /work/
 .dev-server*.log
 .gh-auth*.log

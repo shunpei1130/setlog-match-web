@@ -75,6 +75,10 @@ export function parseCsv(text) {
   const headers = rows[0].map((header) => header.replace(/^\uFEFF/, "").trim());
   const records = rows.slice(1).map((values, rowIndex) => {
     const record = { __row: rowIndex + 2 };
+    if (values.length !== headers.length) {
+      record.__columnCount = values.length;
+      record.__extraColumns = values.slice(headers.length);
+    }
     headers.forEach((header, index) => {
       record[header] = String(values[index] ?? "").trim();
     });
@@ -115,6 +119,9 @@ export function validateLeads({ headers, records }, { strict = false } = {}) {
 
   records.forEach((record) => {
     const row = record.__row;
+    if (record.__columnCount != null && record.__columnCount !== headers.length) {
+      errors.push(`Row ${row}: expected ${headers.length} CSV columns, found ${record.__columnCount}; extra cells must not be discarded`);
+    }
     const handle = normalizeHandle(record.instagram_username);
     if (!handle) {
       errors.push(`Row ${row}: instagram_username is required`);

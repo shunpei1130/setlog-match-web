@@ -1,16 +1,16 @@
 import { ActionButton, Card, Eyebrow, Lead, Notice, Title } from "@/components/ui";
 import { SafetyModal } from "@/components/safety-modal";
 import { emptyDecision, hasDecision, toggleDecision } from "@/lib/decision";
-import { colors } from "@/theme";
+import { colors, layout } from "@/theme";
 import type { DecisionOption, MobileUser, PairDecision, RemotePair } from "@/types";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 const optionContent: Record<DecisionOption, { icon: string; title: string; copy: string }> = {
-  instagram: { icon: "◎", title: "Instagram", copy: "お互いに選んだら開示" },
-  line: { icon: "▣", title: "LINE", copy: "お互いに選んだら開示" },
-  continue: { icon: "↻", title: "もう一日Setlogする", copy: "次回、もう一日だけ共有" },
-  none: { icon: "—", title: "何も教えない", copy: "相手には何も伝えない" },
+  instagram: { icon: "◎", title: "Instagramを交換したい", copy: "ふたりとも選んだ場合だけ交換します" },
+  line: { icon: "▣", title: "LINEを交換したい", copy: "ふたりとも選んだ場合だけ交換します" },
+  continue: { icon: "↻", title: "明日（日曜）も続けたい", copy: "ふたりとも選ぶと、同じ相手ともう一日" },
+  none: { icon: "—", title: "今回はここで終える", copy: "連絡先を交換せず、今日で終了します" },
 };
 
 export function DecisionScreen({
@@ -33,6 +33,7 @@ export function DecisionScreen({
   const [decision, setDecision] = useState<PairDecision>(pair.decision ?? emptyDecision);
   const [error, setError] = useState<string | null>(null);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [focused, setFocused] = useState<DecisionOption | null>(null);
   const pending = pair.decision?.answered || pair.result?.kind === "pending";
 
   useEffect(() => {
@@ -44,11 +45,11 @@ export function DecisionScreen({
 
   const choose = (option: DecisionOption) => {
     if (option === "instagram" && !user.instagramHandle) {
-      setError("Instagramは事前登録で未設定です。");
+      setError("Instagramのユーザーネームが登録されていません。");
       return;
     }
     if (option === "line" && !user.lineContact) {
-      setError("LINEの連絡先は事前登録で未設定です。");
+      setError("LINEの連絡先が登録されていません。");
       return;
     }
     setDecision((current) => toggleDecision(current, option));
@@ -57,11 +58,11 @@ export function DecisionScreen({
 
   const submit = async () => {
     if (!pair.decisionOpen) {
-      setError("非公開判定は土曜22時から回答できます。");
+      setError("回答できるのは22:00〜23:00です。");
       return;
     }
     if (!hasDecision(decision)) {
-      setError("いずれかを選ぶか、「何も教えない」を選択してください。");
+      setError("希望する項目か、「今回はここで終える」を選んでください。");
       return;
     }
     await onSubmit(decision);
@@ -69,24 +70,24 @@ export function DecisionScreen({
 
   return (
     <View style={styles.container}>
-      <Eyebrow>05 / PRIVATE DECISION</Eyebrow>
-      <Title>続けたいものだけ、{`\n`}静かに選ぶ。</Title>
-      <Lead>{pair.candidate.nickname}さんとの一日を振り返り、続けたいものを選んでください。</Lead>
+      <Eyebrow>今日の振り返り</Eyebrow>
+      <Title>このあと、{`\n`}どうしたい？</Title>
+      <Lead>{pair.candidate.nickname}さんとの一日を振り返って、希望する項目を選んでください。複数選べます。回答は相手に表示されません。</Lead>
 
       {pending ? (
         <>
           <Card accent>
-            <Text style={styles.pendingMark}>✓ ANSWERED</Text>
+            <Text style={styles.pendingMark}>✓ 回答済み</Text>
             <Text style={styles.pendingTitle}>回答を受け付けました</Text>
-            <Text style={styles.pendingCopy}>相手の回答を待っています。回答内容や片方だけの希望は表示されません。</Text>
+            <Text style={styles.pendingCopy}>相手の回答を待っています。回答は相手に表示されません。</Text>
           </Card>
           <ActionButton disabled={busy} onPress={() => void onRefresh()}>結果を確認する</ActionButton>
         </>
       ) : (
         <>
           {error ? <Notice onDismiss={() => setError(null)}>{error}</Notice> : null}
-          <View accessibilityLabel="開示する項目" style={styles.options}>
-            {(Object.keys(optionContent) as DecisionOption[]).map((option) => {
+          <View accessibilityLabel="このあとの希望" style={styles.options}>
+            {(Object.keys(optionContent) as DecisionOption[]).filter((option) => pair.kind !== "extension" || option !== "continue").map((option) => {
               const content = optionContent[option];
               const selected = decision[option];
               const unavailable = (option === "instagram" && !user.instagramHandle) || (option === "line" && !user.lineContact);
@@ -96,19 +97,22 @@ export function DecisionScreen({
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: selected, disabled: unavailable }}
                   disabled={unavailable}
+                  onFocus={() => setFocused(option)}
+                  onBlur={() => setFocused(null)}
                   onPress={() => choose(option)}
                   style={({ pressed }) => [
                     styles.option,
-                    selected && styles.optionSelected,
                     option === "none" && styles.optionMuted,
+                    selected && styles.optionSelected,
                     unavailable && styles.optionUnavailable,
+                    focused === option && Platform.OS === "web" && layout.focusRing,
                     pressed && styles.pressed,
                   ]}
                 >
                   <View style={[styles.optionIcon, selected && styles.optionIconSelected]}><Text style={styles.optionIconText}>{content.icon}</Text></View>
                   <View style={styles.optionBody}>
                     <Text style={[styles.optionTitle, selected && styles.optionSelectedText]}>{content.title}</Text>
-                    <Text style={[styles.optionCopy, selected && styles.optionSelectedText]}>{unavailable ? "事前登録で未設定" : content.copy}</Text>
+                    <Text style={[styles.optionCopy, selected && styles.optionSelectedText]}>{unavailable ? "連絡先が登録されていません" : content.copy}</Text>
                   </View>
                   <Text style={[styles.optionMark, selected && styles.optionSelectedText]}>{selected ? "✓" : "+"}</Text>
                 </Pressable>
@@ -116,15 +120,15 @@ export function DecisionScreen({
             })}
           </View>
           <Card accent>
-            <Text style={styles.privacyTitle}>非公開のまま判定します</Text>
-            <Text style={styles.privacyCopy}>相手の回答、片方だけが希望した事実、不成立の理由は表示しません。</Text>
+            <Text style={styles.privacyTitle}>お互いの希望が合ったときだけ</Text>
+            <Text style={styles.privacyCopy}>ふたりとも選んだ連絡先だけを交換します。{pair.kind !== "extension" ? "「明日（日曜）も続けたい」を選んだ場合は、今回は連絡先を交換しません。" : ""}片方だけが選んだ項目や、終了の理由は表示されません。</Text>
           </Card>
           <ActionButton disabled={busy || !pair.decisionOpen} onPress={() => void submit()}>
-            {busy ? "送信中…" : pair.decisionOpen ? "この内容で送信する →" : "22時から回答できます"}
+            {busy ? "送信中…" : pair.decisionOpen ? "この内容で回答する" : "22時から回答できます"}
           </ActionButton>
         </>
       )}
-      <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったとき・安全メニュー</ActionButton>
+      <ActionButton variant="danger" onPress={() => setSafetyOpen(true)}>困ったときは</ActionButton>
       <SafetyModal visible={safetyOpen} busy={busy} onClose={() => setSafetyOpen(false)} onBlock={onBlock} onReport={onReport} />
     </View>
   );

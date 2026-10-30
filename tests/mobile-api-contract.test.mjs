@@ -145,13 +145,16 @@ test("admin pair edits only use LINE-registered participants", async () => {
 });
 
 test("block and report stay participant-authenticated safety actions", async () => {
-  const [blockRoute, reportRoute] = await Promise.all([
+  const [blockRoute, reportRoute, lifecycle] = await Promise.all([
     source("../app/api/pairs/[pairId]/block/route.ts"),
     source("../app/api/pairs/[pairId]/report/route.ts"),
+    source("../lib/lifecycle.ts"),
   ]);
   assert.match(blockRoute, /getApiAuthUser\(request\)/);
-  assert.match(blockRoute, /blockedUserId/);
+  assert.match(blockRoute, /stopPair\(pairId, user\.id\)/);
   assert.match(reportRoute, /getApiAuthUser\(request\)/);
-  assert.match(reportRoute, /safetyReports/);
+  assert.match(reportRoute, /stopPair\(pairId, user\.id, \{ reason, detail \}\)/);
+  assert.match(lifecycle, /INSERT INTO safety_reports/);
+  assert.match(lifecycle, /INSERT INTO blocks/);
   assert.match(reportRoute, /REPORT_REASON_REQUIRED/);
 });

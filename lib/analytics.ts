@@ -85,6 +85,7 @@ export async function recordFunnelEvent(
   eventName: FunnelEvent,
   options: { userId?: string | null; eventId?: string | null; dedupeKey?: string | null; visitorId?: string | null; attribution?: Attribution } = {},
 ) {
+  if (process.env.APP_ENV === "review") return false;
   const visitorId = options.visitorId ?? readVisitorId(request);
   if (!visitorId) return false;
   const attribution = options.attribution ?? readAttribution(request);

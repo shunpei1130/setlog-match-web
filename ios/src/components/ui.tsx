@@ -1,6 +1,6 @@
 import { colors, layout } from "@/theme";
 import type { AppPhase } from "@/types";
-import type { PropsWithChildren, ReactNode } from "react";
+import { useState, type PropsWithChildren, type ReactNode } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -10,6 +10,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type StyleProp,
+  type TextStyle,
   type TextInputProps,
   View,
 } from "react-native";
@@ -35,37 +37,44 @@ export function Page({ children, footer }: PropsWithChildren<{ footer?: ReactNod
   );
 }
 
-export function AppHeader({ signedIn, onSignOut }: { signedIn: boolean; onSignOut: () => void }) {
+export function AppHeader({ signedIn, onSignOut, onSettings }: { signedIn: boolean; onSignOut: () => void; onSettings?: () => void }) {
+  const [focused, setFocused] = useState<string | null>(null);
   return (
     <View style={styles.header}>
       <View style={styles.brand} accessibilityLabel="set-mob">
         <View style={styles.brandMark}><Text style={styles.brandMarkText}>m</Text></View>
         <View>
           <Text style={styles.brandTitle}>set-mob</Text>
-          <Text style={styles.brandCaption}>SATURDAY ISSUE</Text>
+          <Text style={styles.brandCaption}>青学生の、土曜日。</Text>
         </View>
       </View>
+      <View style={{ flexDirection: "row", gap: 16 }}>
+      {onSettings ? <Pressable accessibilityRole="button" accessibilityLabel="設定・ヘルプ" hitSlop={8} onPress={onSettings} onFocus={() => setFocused("settings")} onBlur={() => setFocused(null)} style={({ pressed }) => [styles.headerAction, focused === "settings" && Platform.OS === "web" && layout.focusRing, pressed && styles.pressed]}><Text style={styles.headerActionText}>{signedIn ? "設定" : "ヘルプ"}</Text></Pressable> : null}
       {signedIn ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="サインアウト"
+          accessibilityLabel="ログアウト"
           hitSlop={8}
           onPress={onSignOut}
-          style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
+          onFocus={() => setFocused("signOut")}
+          onBlur={() => setFocused(null)}
+          style={({ pressed }) => [styles.headerAction, focused === "signOut" && Platform.OS === "web" && layout.focusRing, pressed && styles.pressed]}
         >
           <Text style={styles.headerActionText}>ログアウト</Text>
         </Pressable>
       ) : null}
+      </View>
     </View>
   );
 }
 
 const steps: Partial<Record<AppPhase, { current: number; label: string }>> = {
-  registration: { current: 1, label: "事前登録" },
+  registration: { current: 1, label: "参加登録" },
   waiting: { current: 2, label: "土曜を待つ" },
-  pair: { current: 3, label: "Day Pair" },
-  decision: { current: 4, label: "非公開判定" },
+  pair: { current: 3, label: "今日の相手" },
+  decision: { current: 4, label: "今日の振り返り" },
   result: { current: 5, label: "結果" },
+  ended: { current: 5, label: "結果" },
 };
 
 export function Progress({ phase }: { phase: AppPhase }) {
@@ -74,7 +83,7 @@ export function Progress({ phase }: { phase: AppPhase }) {
   return (
     <View style={styles.progress} accessibilityLabel={`${step.label}、全5段階中${step.current}段階`}>
       <View style={styles.progressRow}>
-        <Text style={styles.micro}>SET-MOB</Text>
+        <Text style={styles.micro}>参加の流れ</Text>
         <Text style={styles.micro}>{step.current} / 5</Text>
       </View>
       <View style={styles.progressTrack}>
@@ -102,8 +111,8 @@ export function Eyebrow({ children }: PropsWithChildren) {
   return <Text style={styles.eyebrow}>{children}</Text>;
 }
 
-export function Title({ children }: PropsWithChildren) {
-  return <Text accessibilityRole="header" style={styles.title}>{children}</Text>;
+export function Title({ children, style }: PropsWithChildren<{ style?: StyleProp<TextStyle> }>) {
+  return <Text accessibilityRole="header" style={[styles.title, style]}>{children}</Text>;
 }
 
 export function Lead({ children }: PropsWithChildren) {
@@ -128,6 +137,7 @@ export function ActionButton({
   variant = "primary",
   accessibilityLabel,
 }: ActionButtonProps) {
+  const [focused, setFocused] = useState(false);
   return (
     <Pressable
       accessibilityRole="button"
@@ -135,12 +145,15 @@ export function ActionButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       style={({ pressed }) => [
         styles.button,
         variant === "primary" && styles.buttonPrimary,
         variant === "secondary" && styles.buttonSecondary,
         variant === "danger" && styles.buttonDanger,
         disabled && styles.disabled,
+        focused && Platform.OS === "web" && layout.focusRing,
         pressed && styles.pressed,
       ]}
     >
@@ -168,6 +181,7 @@ export function Field({
   error,
   ...props
 }: TextInputProps & { label: string; error?: string | null }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -176,7 +190,9 @@ export function Field({
         accessibilityLabel={label}
         accessibilityState={{ disabled: props.editable === false }}
         placeholderTextColor={colors.inkSoft}
-        style={[styles.input, props.multiline && styles.inputMultiline, error && styles.inputError]}
+        onFocus={(event) => { setFocused(true); props.onFocus?.(event); }}
+        onBlur={(event) => { setFocused(false); props.onBlur?.(event); }}
+        style={[styles.input, props.multiline && styles.inputMultiline, error && styles.inputError, focused && Platform.OS === "web" && layout.focusRing]}
       />
       {error ? <Text accessibilityRole="alert" style={styles.fieldError}>{error}</Text> : null}
     </View>
@@ -194,6 +210,7 @@ export function OptionGrid<T extends string>({
   value: string;
   onChange: (value: T) => void;
 }) {
+  const [focused, setFocused] = useState<T | null>(null);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -204,9 +221,11 @@ export function OptionGrid<T extends string>({
             <Pressable
               key={option.value}
               accessibilityRole="radio"
+              onFocus={() => setFocused(option.value)}
+              onBlur={() => setFocused(null)}
               accessibilityState={{ checked: selected }}
               onPress={() => onChange(option.value)}
-              style={({ pressed }) => [styles.option, selected && styles.optionSelected, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.option, selected && styles.optionSelected, focused === option.value && Platform.OS === "web" && layout.focusRing, pressed && styles.pressed]}
             >
               <Text style={[styles.optionText, selected && styles.optionSelectedText]}>{option.label}</Text>
             </Pressable>
@@ -228,19 +247,22 @@ export function CheckRow({
   description: string;
   onPress: () => void;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
     <Pressable
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       onPress={onPress}
-      style={({ pressed }) => [styles.checkRow, checked && styles.checkRowChecked, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.checkRow, checked && styles.checkRowChecked, focused && Platform.OS === "web" && layout.focusRing, pressed && styles.pressed]}
     >
       <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
         <Text style={styles.checkboxMark}>{checked ? "✓" : ""}</Text>
       </View>
       <View style={styles.flex}>
-        <Text style={styles.checkTitle}>{title}</Text>
-        <Text style={styles.checkDescription}>{description}</Text>
+        <Text style={[styles.checkTitle, checked && styles.checkedCopy]}>{title}</Text>
+        <Text style={[styles.checkDescription, checked && styles.checkedCopy]}>{description}</Text>
       </View>
     </Pressable>
   );
@@ -298,4 +320,5 @@ const styles = StyleSheet.create({
   checkboxMark: { color: colors.surface, fontSize: 13, fontWeight: "900" },
   checkTitle: { color: colors.ink, fontSize: 14, fontWeight: "900" },
   checkDescription: { color: colors.ink, fontSize: 12, lineHeight: 19, marginTop: 3 },
+  checkedCopy: { color: colors.surface },
 });

@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import type { getDb } from "../db";
 import { eventRegistrations, events } from "../db/schema";
 import { currentWeeklyEventSchedule, NEXT_EVENT_ALIAS, scheduleForEventKey, timingForEvent } from "./event-schedule";
@@ -19,7 +19,9 @@ export async function ensureEvent(db: Database, eventKey: string, now = new Date
   const schedule = scheduleForEventKey(eventKey, now);
   const existing = await db.query.events.findFirst({ where: eq(events.eventKey, schedule.eventKey) });
   if (existing) return existing;
-  if (eventKey !== NEXT_EVENT_ALIAS && schedule.eventKey !== currentWeeklyEventSchedule(now).eventKey) {
+  if (eventKey.startsWith("sun-")) throw new Error("EVENT_NOT_FOUND");
+  if (eventKey !== NEXT_EVENT_ALIAS && schedule.eventKey !== currentWeeklyEventSchedule(now).eventKey
+    && schedule.eventKey !== currentWeeklyEventSchedule(new Date(now.getTime() + 7 * 86400_000)).eventKey) {
     throw new Error("EVENT_NOT_FOUND");
   }
 
@@ -43,82 +45,10 @@ export function eventState(event: typeof events.$inferSelect, now = new Date()) 
   const timing = timingForEvent(event.startsAt, now);
   return {
     eventKey: event.eventKey,
+    kind: event.kind as "weekly" | "extension",
     ...timing,
-    registrationOpen: event.status === "open" && timing.registrationOpen,
+    registrationOpen: event.kind !== "extension" && event.status === "open" && timing.registrationOpen,
     canCancel: event.status === "open" && timing.canCancel,
-  };
-}
-
-export async function cancelEventRegistration(db: Database, eventId: string, userId: string) {
-  const rows = await db.execute(sql`
-    WITH cancelled AS (
-      UPDATE event_registrations
-      SET status = 'cancelled', updated_at = now()
-      WHERE event_id = ${eventId}::uuid
-        AND user_id = ${userId}::uuid
-        AND status = 'waiting'
-      RETURNING line_status
-    ), removed_pairs AS (
-      DELETE FROM event_pairs
-      WHERE event_id = ${eventId}::uuid
-        AND (${userId}::uuid = participant_a_id OR ${userId}::uuid = participant_b_id)
-        AND EXISTS (SELECT 1 FROM cancelled)
-      RETURNING id
-    ), adjusted AS (
-      UPDATE events
-      SET waiting_count = GREATEST(
-        0,
-        waiting_count - (
-          SELECT count(*)::integer
-          FROM cancelled
-          WHERE line_status = 'registered'
-        )
-      )
-      WHERE id = ${eventId}::uuid
-      RETURNING id
-    )
-    SELECT
-      EXISTS(SELECT 1 FROM cancelled) AS cancelled,
-      (SELECT count(*)::integer FROM removed_pairs) AS "removedPairs"
-  `);
-  const [result] = rows as unknown as Array<{ cancelled: boolean; removedPairs: number }>;
-  return Boolean(result?.cancelled);
-}
-
-export async function reserveEventRegistration(
-  db: Database,
-  eventId: string,
-  sessionId: string,
-  userId: string,
-  profile: RegistrationProfile,
-  preferences: RegistrationPreferences,
-): Promise<RegistrationReservation> {
-  const rows = await db.execute(sql`
-    SELECT registered, waiting_count AS "waitingCount", capacity
-    FROM register_event_waiting(
-      ${eventId}::uuid,
-      ${sessionId}::uuid,
-      ${userId}::uuid,
-      ${profile.nickname},
-      ${profile.faculty},
-      ${profile.academicYear},
-      ${profile.gender},
-      ${preferences.purpose}::match_purpose,
-      ${preferences.preferredGender}::gender_preference
-    )
-  `);
-  const [result] = rows as unknown as Array<{
-    registered: boolean;
-    waitingCount: number | string;
-    capacity: number | string;
-  }>;
-
-  if (!result) throw new Error("Registration reservation was not returned.");
-
-  return {
-    registered: result.registered,
-    waitingCount: Number(result.waitingCount),
-    capacity: Number(result.capacity),
   };
 }
 

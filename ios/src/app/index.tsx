@@ -9,14 +9,16 @@ import { WaitingScreen } from "@/components/waiting-screen";
 import { useApp } from "@/context/app-context";
 import { colors } from "@/theme";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { router, type Href } from "expo-router";
 
 export default function HomeScreen() {
   const app = useApp();
 
   return (
     <Page>
-      <AppHeader signedIn={Boolean(app.user)} onSignOut={() => void app.signOut()} />
-      <Progress phase={app.phase} />
+      <AppHeader signedIn={Boolean(app.user)} onSignOut={() => void app.signOut()} onSettings={() => router.push("/settings" as Href)} />
+      {app.isReview ? <Notice>審査用アカウント / 架空データ</Notice> : null}
+      <Progress phase={app.phase === "waiting" && app.event?.matchingStatus === "unmatched" ? "result" : app.phase} />
       {app.notice && app.phase !== "ended" ? <Notice onDismiss={app.dismissNotice}>{app.notice}</Notice> : null}
       {app.phase === "booting" ? <LoadingScreen /> : null}
       {app.phase === "landing" ? <LandingScreen onStart={app.beginAuth} /> : null}
@@ -25,7 +27,9 @@ export default function HomeScreen() {
       ) : null}
       {app.phase === "registration" && app.user ? (
         <RegistrationScreen
+          key={app.event?.eventKey}
           user={app.user}
+          initialProfile={app.event?.registration ?? app.event?.previousRegistration}
           line={app.line}
           busy={app.busy}
           onConnectLine={app.connectLine}
@@ -39,6 +43,7 @@ export default function HomeScreen() {
           busy={app.busy}
           onStart={app.startMatching}
           onCancel={app.cancelRegistration}
+          onNext={app.nextEvent}
         />
       ) : null}
       {app.phase === "pair" && app.pair ? (
@@ -47,6 +52,8 @@ export default function HomeScreen() {
           busy={app.busy}
           setlogOpen={app.setlogOpen}
           onOpenSetlog={app.openSetlog}
+          onSaveInvite={app.saveInvite}
+          onConfirmJoined={app.confirmJoined}
           onCloseSetlog={app.closeSetlog}
           onDecision={app.openDecision}
           onBlock={app.blockPair}
@@ -65,9 +72,9 @@ export default function HomeScreen() {
         />
       ) : null}
       {app.phase === "result" && app.pair?.result ? (
-        <ResultScreen pair={app.pair} onSignOut={app.signOut} />
+        <ResultScreen pair={app.pair} onSignOut={app.signOut} onCancelExtension={app.cancelExtension} onNext={app.nextEvent} />
       ) : null}
-      {app.phase === "ended" ? <EndedScreen notice={app.notice} onSignOut={app.signOut} /> : null}
+      {app.phase === "ended" ? <EndedScreen notice={app.notice} onSignOut={app.signOut} onNext={app.nextEvent} /> : null}
     </Page>
   );
 }
@@ -76,7 +83,7 @@ function LoadingScreen() {
   return (
     <View accessibilityRole="progressbar" accessibilityLabel="読み込み中" style={styles.loading}>
       <ActivityIndicator color={colors.accentDark} size="large" />
-      <Text style={styles.loadingText}>土曜の準備を確認しています…</Text>
+      <Text style={styles.loadingText}>参加状況を確認しています…</Text>
     </View>
   );
 }

@@ -39,7 +39,7 @@ export async function GET(
   try {
     const db = getDb();
     const event = await ensureEvent(db, eventKey);
-    const rows = await db.execute(sql`
+    const { rows } = await db.execute(sql`
       SELECT
         p.id,
         p.status,
@@ -88,6 +88,7 @@ export async function POST(
   try {
     const db = getDb();
     const event = await ensureEvent(db, eventKey);
+    if (event.kind === "extension") return NextResponse.json({ error: "EXTENSION_INVITE_ONLY" }, { status: 403 });
     const registrations = await db.select({
       userId: eventRegistrations.userId,
       gender: eventRegistrations.gender,

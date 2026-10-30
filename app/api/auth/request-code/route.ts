@@ -15,6 +15,7 @@ import { recordFunnelEvent } from "../../../../lib/analytics";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (process.env.APP_ENV === "review") return new Response("Not found", { status: 404 });
   const body = await request.json().catch(() => null) as { email?: unknown } | null;
   const email = normalizeAllowedAuthEmail(body?.email);
   if (!email) return NextResponse.json({ error: "AOYAMA_EMAIL_REQUIRED" }, { status: 400 });

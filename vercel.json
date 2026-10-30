@@ -3,6 +3,10 @@
   "buildCommand": "npm run build",
   "crons": [
     {
+      "path": "/api/cron/event-matching",
+      "schedule": "0 3 * * 6"
+    },
+    {
       "path": "/api/cron/line-reminder",
       "schedule": "0 12 * * 5"
     }

@@ -57,6 +57,13 @@
       "when": 1786585129047,
       "tag": "0007_fast_praxagora",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792657397653,
+      "tag": "0008_automatic_pairing",
+      "breakpoints": true
     }
   ]
 }

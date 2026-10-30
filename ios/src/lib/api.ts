@@ -11,6 +11,10 @@ import type {
 const EVENT_KEY = "next-saturday";
 const rawBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 export const API_BASE_URL = rawBaseUrl.replace(/\/$/, "");
+export const REVIEW_API_BASE_URL = (process.env.EXPO_PUBLIC_REVIEW_API_BASE_URL ?? "").replace(/\/$/, "");
+let apiEnvironment: "production" | "review" = "production";
+export const setApiEnvironment = (value: "production" | "review") => { apiEnvironment = value; };
+export const getApiEnvironment = () => apiEnvironment;
 
 export class ApiError extends Error {
   constructor(
@@ -26,7 +30,9 @@ async function apiRequest<T>(path: string, init: RequestInit = {}, token?: strin
   headers.set("Accept", "application/json");
   if (init.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const baseUrl = apiEnvironment === "review" ? REVIEW_API_BASE_URL : API_BASE_URL;
+  if (!baseUrl) throw new ApiError(503, "REVIEW_NOT_CONFIGURED");
+  const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   const payload = await response.json().catch(() => null) as (T & { error?: string }) | null;
   if (!response.ok) {
     throw new ApiError(response.status, payload?.error ?? "REQUEST_FAILED");
@@ -67,8 +73,32 @@ export const mobileApi = {
     return apiRequest<EventState>(`/api/events/${encodeURIComponent(eventKey)}/registrations`, {}, token);
   },
 
-  register(token: string, input: RegistrationInput) {
-    return apiRequest<EventState & { registered: boolean }>(`/api/events/${EVENT_KEY}/registrations`, {
+  participation(token: string, next = false) {
+    return apiRequest<{ event: EventState; pair: RemotePair | null }>(`/api/me/participation${next ? "?next=true" : ""}`, {}, token);
+  },
+
+  saveInvite(token: string, pairId: string, invite: string) {
+    return apiRequest<{ pair: RemotePair }>(`/api/pairs/${encodeURIComponent(pairId)}/setlog-invite`, { method: "PUT", body: JSON.stringify({ invite }) }, token);
+  },
+
+  confirmJoined(token: string, pairId: string) {
+    return apiRequest<{ pair: RemotePair }>(`/api/pairs/${encodeURIComponent(pairId)}/setlog-invite`, { method: "POST" }, token);
+  },
+
+  deleteAccount(token: string) {
+    return apiRequest<{ deleted: true }>("/api/me", { method: "DELETE" }, token);
+  },
+
+  reviewLogin(username: string, password: string) {
+    return apiRequest<{ accessToken: string }>("/api/mobile/review/session", { method: "POST", body: JSON.stringify({ username, password }) });
+  },
+
+  reviewScenario(token: string, scenario: string) {
+    return apiRequest<{ ready: true }>("/api/mobile/review/scenario", { method: "POST", body: JSON.stringify({ scenario }) }, token);
+  },
+
+  register(token: string, input: RegistrationInput, eventKey = EVENT_KEY) {
+    return apiRequest<EventState & { registered: boolean }>(`/api/events/${encodeURIComponent(eventKey)}/registrations`, {
       method: "POST",
       body: JSON.stringify(input),
     }, token);

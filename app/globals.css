@@ -26,6 +26,7 @@ body {
 }
 
 button, input, select, textarea { font: inherit; }
+.environment-banner { padding: 12px 16px; background: var(--surface-muted); border-bottom: 1px solid var(--line); color: var(--ink); text-align: center; font-size: 12px; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: 0.55; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
@@ -513,7 +514,6 @@ body {
 
 .landing-grid { padding-top: 40px; }
 .hero-copy { position: relative; gap: 16px; }
-.hero-copy::after { content: "AOYAMA / EVERY SATURDAY"; position: absolute; top: 2px; right: -8px; color: var(--accent-dark); font-family: "Arial Narrow", "Arial", sans-serif; font-size: 9px; font-weight: 900; letter-spacing: 0.13em; writing-mode: vertical-rl; }
 .eyebrow { display: inline-block; width: fit-content; padding-left: 8px; border-left: 8px solid var(--accent); color: var(--ink); font-family: "Arial Narrow", "Arial", sans-serif; font-size: 10px; font-weight: 900; letter-spacing: 0.11em; text-transform: uppercase; }
 h1, h2, h3 { font-family: "Arial Black", Impact, sans-serif; font-weight: 900; }
 h1, h2 { letter-spacing: -0.095em; line-height: 0.96; }
@@ -532,14 +532,13 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
 .text-button:hover { color: var(--accent-dark); }
 
 .event-card { min-height: 304px; margin: 5px 8px 11px 0; padding: 20px; border: 2px solid var(--ink); border-radius: 0; background: var(--accent); box-shadow: 7px 7px 0 var(--ink); transform: rotate(-1.2deg); }
-.event-card::before { content: "SATURDAY / ISSUE 001"; position: absolute; top: 24px; right: -48px; padding: 5px 8px; background: var(--ink); color: var(--paper); font-family: "Arial Narrow", "Arial", sans-serif; font-size: 9px; font-weight: 900; letter-spacing: 0.12em; writing-mode: vertical-rl; }
 .event-card__top, .event-card__bottom { color: var(--ink); }
 .status-pill { border: 2px solid var(--ink); border-radius: 0; background: var(--surface-muted); color: var(--ink); font-family: "Arial Narrow", "Arial", sans-serif; font-size: 9px; font-weight: 900; text-transform: uppercase; }
 .status-pill--light { background: var(--surface); }
 .status-dot { background: var(--ink); }
 .event-number { color: var(--ink); font-family: "Arial Narrow", "Arial", sans-serif; font-weight: 900; }
 .date-lockup span { color: var(--ink); font-family: "Arial Narrow", "Arial", sans-serif; font-weight: 900; }
-.date-lockup strong { color: var(--surface); font-family: "Arial Black", Impact, sans-serif; font-size: clamp(90px, 29vw, 140px); letter-spacing: -0.14em; line-height: 0.88; text-shadow: 4px 4px 0 var(--ink); }
+.date-lockup strong { margin: 0; color: var(--surface); font-size: clamp(76px, 24vw, 118px); letter-spacing: -0.05em; line-height: 1.2; text-shadow: 4px 4px 0 var(--ink); }
 .event-card__count { border-color: var(--ink); }
 .event-card__count .label, .waiting-card__count .label { color: var(--ink); font-family: "Arial Narrow", "Arial", sans-serif; font-weight: 900; }
 .event-card__count strong, .waiting-card__count strong { font-family: "Arial Black", Impact, sans-serif; letter-spacing: -0.08em; }
@@ -729,6 +728,8 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
 .line-modal .line-modal__mark { margin: 0; }
 
 @media (max-width: 679px) {
+  .hero-copy h1 { font-size: clamp(32px, 10vw, 42px); line-height: 1.15; letter-spacing: -0.05em; }
+  .hero-copy h1 em { white-space: normal; }
   html { -webkit-text-size-adjust: 100%; }
   body { overflow-x: clip; }
   .topbar { width: 100%; padding: 14px 16px 12px; }
@@ -754,7 +755,7 @@ h1 em, h2 em { display: inline-block; white-space: nowrap; padding: 0 0.08em 0.0
   .profile-form__header strong { font-size: 14px; }
   .profile-field input, .profile-field select { min-height: 54px; font-size: 16px; }
   .profile-field label { font-size: 13px; }
-  .date-lockup strong { font-size: clamp(78px, 25vw, 116px); }
+  .date-lockup strong { font-size: clamp(76px, 24vw, 96px); }
   .event-card__count .label, .waiting-card__count .label { font-size: 11px; }
   .event-card__count strong, .waiting-card__count strong { font-size: 24px; }
   .event-card__count small, .waiting-card__count p { font-size: 12px; line-height: 1.6; }

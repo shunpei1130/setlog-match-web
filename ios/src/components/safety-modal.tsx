@@ -1,13 +1,13 @@
 import { ActionButton, Field, OptionGrid } from "@/components/ui";
-import { colors } from "@/theme";
+import { colors, layout } from "@/theme";
 import { useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const reasons = [
   { value: "harassment", label: "嫌がらせ" },
-  { value: "identity", label: "所属・本人確認" },
-  { value: "solicitation", label: "勧誘・金銭" },
+  { value: "identity", label: "なりすまし・所属の偽り" },
+  { value: "solicitation", label: "勧誘・金銭の要求" },
   { value: "other", label: "その他" },
 ] as const;
 
@@ -27,10 +27,11 @@ export function SafetyModal({
   const [reason, setReason] = useState("");
   const [detail, setDetail] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [closeFocused, setCloseFocused] = useState(false);
 
   const report = async () => {
     if (!reason) {
-      setError("通報理由を選択してください。");
+      setError("通報する理由を選んでください。");
       return;
     }
     await onReport(reason, detail);
@@ -45,17 +46,18 @@ export function SafetyModal({
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
             <View style={styles.header}>
               <View style={styles.headerCopy}>
-                <Text style={styles.eyebrow}>SAFETY FIRST</Text>
-                <Text accessibilityRole="header" style={styles.title}>すぐに離れて大丈夫。</Text>
+                <Text style={styles.eyebrow}>困ったときは</Text>
+                <Text accessibilityRole="header" style={styles.title}>無理に続けなくて大丈夫。</Text>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="閉じる" hitSlop={8} onPress={onClose} style={styles.close}>
+              <Pressable accessibilityRole="button" accessibilityLabel="閉じる" hitSlop={8} onPress={onClose} onFocus={() => setCloseFocused(true)} onBlur={() => setCloseFocused(false)} style={[styles.close, closeFocused && Platform.OS === "web" && layout.focusRing]}>
                 <Text style={styles.closeText}>×</Text>
               </Pressable>
             </View>
-            <Text style={styles.copy}>返信や理由の説明は必要ありません。ブロックすると相手を非表示にし、通報すると運営へ共有します。</Text>
+            <Text style={styles.copy}>返信や理由の説明は必要ありません。ブロック・通報すると、set-mobでのやり取りは終了します。通報内容は運営が確認します。</Text>
+            <Text style={styles.copy}>set-mobのブロック・通報では、Setlog側の共有は停止できません。退出・ブロックはSetlogで操作してください。</Text>
             <ActionButton disabled={busy} variant="danger" onPress={() => void onBlock()}>相手をブロックして終了する</ActionButton>
             <View style={styles.divider} />
-            <OptionGrid label="通報理由" options={reasons} value={reason} onChange={(value) => { setReason(value); setError(null); }} />
+            <OptionGrid label="通報する理由" options={reasons} value={reason} onChange={(value) => { setReason(value); setError(null); }} />
             <Field label="補足（任意）" multiline maxLength={1000} value={detail} onChangeText={setDetail} placeholder="気になったことを書いてください" />
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             <ActionButton disabled={busy} variant="secondary" onPress={() => void report()}>運営に通報して終了する</ActionButton>
