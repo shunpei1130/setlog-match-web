@@ -20,7 +20,7 @@ export type PairView = {
   status: "draft" | "published" | "closed" | "blocked";
   setlogUrl: string | null;
   setlogCode: string | null;
-  invite: { status: "waiting" | "ready"; canEdit: boolean; suggestedCreator: boolean; joined: boolean };
+  invite: { status: "waiting" | "ready"; canEdit: boolean; suggestedCreator: boolean; submittedByMe: boolean; joined: boolean };
   extension: { eventKey: string; startsAt: string; status: string; canCancel: boolean } | null;
   candidate: {
     id: string;
@@ -192,7 +192,7 @@ export async function getPairViewForUser(db: Database, pairId: string, userId: s
     status: row.status,
     setlogUrl: timing.ended ? null : row.setlogUrl,
     setlogCode: timing.ended ? null : row.setlogCode,
-    invite: { status: row.setlogCode ? "ready" : "waiting", canEdit, suggestedCreator: userId === row.participantAId, joined: Boolean(members.find((member) => member.user_id === userId)?.joined_at) },
+    invite: { status: row.setlogCode ? "ready" : "waiting", canEdit, suggestedCreator: userId === row.participantAId, submittedByMe: Boolean(row.setlogCode) && row.inviteSubmittedBy === userId, joined: Boolean(members.find((member) => member.user_id === userId)?.joined_at) },
     extension: extension ? { ...extension, startsAt: new Date(extension.startsAt).toISOString(), canCancel: extension.status === "reserved" && Date.now() < new Date(extension.startsAt).getTime() } : null,
     candidate: rowToParticipant(row, userId),
     decision: decisionValues(ownDecision),

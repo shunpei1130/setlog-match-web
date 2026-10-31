@@ -4,8 +4,17 @@ import { getDb } from "../../../../db";
 import { users } from "../../../../db/schema";
 import { verifyLineWebhookSignature } from "../../../../lib/line";
 import { recordFunnelEvent } from "../../../../lib/analytics";
+import { handleLineInviteMessage, handleLineJoinPostback } from "../../../../lib/line-invite";
 
 export const runtime = "nodejs";
+
+type LineWebhookEvent = {
+  type?: string;
+  replyToken?: string;
+  source?: { userId?: string };
+  message?: { type?: string; text?: string };
+  postback?: { data?: string };
+};
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -14,7 +23,7 @@ export async function POST(request: Request) {
       return new Response("Invalid signature", { status: 401 });
     }
     const payload = JSON.parse(body) as {
-      events?: Array<{ type?: string; source?: { userId?: string } }>;
+      events?: LineWebhookEvent[];
     };
     const db = getDb();
     for (const event of payload.events ?? []) {
@@ -29,6 +38,15 @@ export async function POST(request: Request) {
         });
       } else if (event.type === "unfollow") {
         await db.update(users).set({ lineFollowed: false, updatedAt: new Date() }).where(eq(users.lineUserId, lineUserId));
+      } else if (event.type === "message" && event.message?.type === "text" && typeof event.message.text === "string") {
+        // Only Setlog invitations get a reaction; ordinary chat text is ignored.
+        await handleLineInviteMessage({ lineUserId, replyToken: event.replyToken, text: event.message.text });
+      } else if (event.type === "postback" && typeof event.postback?.data === "string") {
+        const params = new URLSearchParams(event.postback.data);
+        const pairId = params.get("pairId");
+        if (params.get("action") === "join_setlog" && pairId) {
+          await handleLineJoinPostback({ lineUserId, replyToken: event.replyToken, pairId });
+        }
       }
     }
     return NextResponse.json({ ok: true });
