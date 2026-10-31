@@ -108,6 +108,13 @@ type RemotePair = {
   status: "draft" | "published" | "closed" | "blocked";
   setlogUrl: string | null;
   setlogCode: string | null;
+  invite: {
+    status: "waiting" | "ready";
+    canEdit: boolean;
+    suggestedCreator: boolean;
+    submittedByMe: boolean;
+    joined: boolean;
+  };
   candidate: {
     id: string;
     nickname: string;
@@ -153,6 +160,29 @@ type LineAdapter = {
   startRegistration: () => Promise<void>;
   scheduleReminder: (eventKey: string) => Promise<void>;
 };
+
+type LiffClient = {
+  init: (config: { liffId: string }) => Promise<void>;
+  isInClient: () => boolean;
+  isLoggedIn: () => boolean;
+  getIDToken: () => string | null;
+};
+
+let liffSdkPromise: Promise<void> | null = null;
+
+function loadLiffSdk(): Promise<void> {
+  if ((window as unknown as { liff?: LiffClient }).liff) return Promise.resolve();
+  if (!liffSdkPromise) {
+    liffSdkPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("LIFF SDK failed to load"));
+      document.head.appendChild(script);
+    });
+  }
+  return liffSdkPromise;
+}
 
 const STORAGE_KEY = "set-mob-state-v1";
 const LEGACY_STORAGE_KEYS = ["setlog-match-mvp-state-v4"] as const;
@@ -311,6 +341,13 @@ const optionLabels: Record<DecisionOption, string> = {
   none: "今回はここで終える",
 };
 
+const inviteErrorMessages: Record<string, string> = {
+  SETLOG_INVITE_INVALID: "招待コードかリンクを確認してください。",
+  SETLOG_INVITE_ALREADY_SAVED: "すでに相手が招待を保存しています。",
+  SETLOG_INVITE_LOCKED: "相手が参加確認済みのため、招待は変更できません。",
+  SETLOG_INVITE_CLOSED: "今は招待を共有できる時間ではありません。",
+};
+
 function resolveResult(decision: PrivateDecision, candidate: Candidate): ResultState {
   if (!decision.answered || decision.none || candidate.partnerWants.includes("none")) {
     return { kind: "ended", items: [] };
@@ -369,6 +406,11 @@ export default function Home() {
   const [lineOfficialAccountUrl, setLineOfficialAccountUrl] = useState<string | null>(null);
   const [remotePair, setRemotePair] = useState<RemotePair | null>(null);
   const [pairLoading, setPairLoading] = useState(false);
+  const [inviteInput, setInviteInput] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteEditing, setInviteEditing] = useState(false);
+  const [setlogOpened, setSetlogOpened] = useState(false);
   const localTest = hydrated && isLocalTestBrowser() && !new URLSearchParams(window.location.search).has("live");
   const liveParticipationActive = !localTest && Boolean(authenticatedEmail) && state.participation;
   const liveRegister = useCallback((eventKey: string) => setState((previous) => ({ ...previous, eventKey, participation: false, phase: "participation", pair: null, result: null })), []);
@@ -505,6 +547,41 @@ export default function Home() {
       }),
       keepalive: true,
     }).catch(() => undefined);
+  }, [hydrated, localTest]);
+
+  useEffect(() => {
+    if (!hydrated || localTest) return;
+    let cancelled = false;
+    const connectLiff = async () => {
+      try {
+        if (window.sessionStorage.getItem("set-mob-liff-session")) return;
+        const me = await fetch("/api/me", { cache: "no-store" });
+        if (me.ok || cancelled) return;
+        const configResponse = await fetch("/api/liff/config", { cache: "no-store" });
+        if (!configResponse.ok || cancelled) return;
+        const config = await configResponse.json() as { liffId?: unknown };
+        if (typeof config.liffId !== "string" || !config.liffId) return;
+        await loadLiffSdk();
+        const liff = (window as unknown as { liff?: LiffClient }).liff;
+        if (!liff || cancelled) return;
+        await liff.init({ liffId: config.liffId });
+        if (cancelled || !liff.isInClient() || !liff.isLoggedIn()) return;
+        const idToken = liff.getIDToken();
+        if (!idToken) return;
+        const session = await fetch("/api/liff/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        });
+        if (!session.ok || cancelled) return;
+        window.sessionStorage.setItem("set-mob-liff-session", "1");
+        window.location.reload();
+      } catch {
+        // Outside the LINE app the page keeps working as a normal web page.
+      }
+    };
+    void connectLiff();
+    return () => { cancelled = true; };
   }, [hydrated, localTest]);
 
   useEffect(() => {
@@ -931,6 +1008,12 @@ export default function Home() {
       : "残りの参加枠を確認中…";
   const eventIsFull = waitingCount.status === "ready" && waitingCount.remaining === 0;
   const decisionIsOpen = !remotePair || remotePair.decisionOpen || waitingCount.decisionOpen === true;
+  const invite = remotePair?.invite ?? null;
+  const inviteReady = Boolean(remotePair?.setlogCode) && invite?.status === "ready";
+  const partnerJoined = Boolean(inviteReady && invite?.submittedByMe && !invite?.canEdit);
+  const step2Done = Boolean(invite && (invite.joined || partnerJoined));
+  const inviteStep = !inviteReady ? 1 : step2Done ? 3 : 2;
+  const showDecisionBlock = step2Done || Boolean(inviteReady && invite?.submittedByMe && !invite?.canEdit);
   const eventDateText = waitingCount.startsAt
     ? new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(waitingCount.startsAt))
     : "次の土曜";
@@ -1094,6 +1177,73 @@ export default function Home() {
       updateState({ setlogStatus: connection.status, notice: null });
     } catch {
       updateState({ setlogStatus: "error", notice: "Setlogへの接続に失敗しました。もう一度試してください。" });
+    }
+  };
+
+  const refreshRemotePair = async () => {
+    if (!remotePair) return;
+    try {
+      const response = await fetch(`/api/events/${encodeURIComponent(remotePair.eventKey)}/pair`, { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json() as { pair?: RemotePair };
+      if (payload.pair) setRemotePair(payload.pair);
+    } catch {
+      // Keep the current view when the refresh fails.
+    }
+  };
+
+  const saveInvite = async () => {
+    if (!remotePair || inviteBusy) return;
+    setInviteBusy(true);
+    try {
+      const response = await fetch(`/api/pairs/${encodeURIComponent(remotePair.id)}/setlog-invite`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite: inviteInput }),
+      });
+      const payload = await response.json().catch(() => null) as { pair?: RemotePair; error?: string } | null;
+      if (!response.ok || !payload?.pair) {
+        updateState({ notice: (payload?.error && inviteErrorMessages[payload.error]) || "招待を保存できませんでした。時間をおいて、もう一度お試しください。" });
+        return;
+      }
+      setRemotePair(payload.pair);
+      setInviteInput("");
+      setInviteEditing(false);
+      updateState({ notice: "招待コードを相手に送りました。相手にはLINEでも届きます。" });
+    } catch {
+      updateState({ notice: "招待を保存できませんでした。通信状況を確認して、もう一度お試しください。" });
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const confirmJoined = async () => {
+    if (!remotePair || inviteBusy) return;
+    setInviteBusy(true);
+    try {
+      const response = await fetch(`/api/pairs/${encodeURIComponent(remotePair.id)}/setlog-invite`, { method: "POST" });
+      const payload = await response.json().catch(() => null) as { pair?: RemotePair; error?: string } | null;
+      if (!response.ok || !payload?.pair) {
+        updateState({ notice: (payload?.error && inviteErrorMessages[payload.error]) || "参加を記録できませんでした。時間をおいて、もう一度お試しください。" });
+        return;
+      }
+      setRemotePair(payload.pair);
+      updateState({ notice: "参加を記録しました。招待を共有した相手にも伝わります。" });
+    } catch {
+      updateState({ notice: "参加を記録できませんでした。通信状況を確認して、もう一度お試しください。" });
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const copyInviteCode = async () => {
+    if (!remotePair?.setlogCode) return;
+    try {
+      await navigator.clipboard.writeText(remotePair.setlogCode);
+      setInviteCopied(true);
+      window.setTimeout(() => setInviteCopied(false), 2500);
+    } catch {
+      updateState({ notice: "コピーできませんでした。コードを見ながら、Setlogに入力してください。" });
     }
   };
 
@@ -1581,13 +1731,34 @@ export default function Home() {
             <p className="eyebrow">05 / Setlogで共有する</p>
             <h2>まずは、<em>一日を共有しよう。</em></h2>
             <p className="section-lede">外部アプリのSetlogで、お互いの土曜日を共有します。連絡先を交換するかは、夜に選べます。</p>
-            <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">Setlog<span>↗</span></div><span className="status-pill status-pill--light">今日の共有先</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">一日を共有する相手</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 土曜日を共有</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>{remotePair ? "Setlogの参加情報を確認できます" : "共有中の画面です（デモ）"}</strong><p>{remotePair ? "下の招待コードかリンクから参加してください。" : "実際の参加では、Setlogで一日を共有したあと、22時にここへ戻ってきてください。"}</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>参加情報を確認できませんでした</strong><p>通信状況を確認して、もう一度お試しください。</p></div> : <div className="setlog-card__action"><p>{remotePair ? "Setlogの招待コードとリンクを表示します。" : "デモでは、Setlogを使わず次の画面を確認できます。"}</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "確認中…" : remotePair ? "参加情報を確認する" : "共有中の画面を見る（デモ）"}<span>↗</span></button></div>}{remotePair && state.setlogStatus === "connected" && <div className="setlog-access"><span className="label">Setlogの招待コード</span><strong>{remotePair.setlogCode}</strong>{remotePair.setlogUrl && <a href={remotePair.setlogUrl} target="_blank" rel="noreferrer">Setlogを開く ↗</a>}</div>}</div>
-            {state.setlogStatus === "connected" && <><div className="setlog-next"><div><span className="label">今日の振り返り</span><strong>回答できるのは22:00〜23:00です</strong><p>連絡先を交換するか、明日も続けるかを選べます。回答は相手に表示されません。</p></div></div><button className="primary-button full-width" onClick={openDecision} disabled={!decisionIsOpen}>{decisionIsOpen ? "回答画面へ進む" : "22時から回答できます"} <span>→</span></button></>}
-            {state.setlogStatus === "error" && <button className="primary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
+            {remotePair ? (
+              <>
+                <div className="pair-timeline" aria-label="共有の手順">
+                  <div className={`timeline-item ${inviteStep > 1 ? "is-done" : "is-current"}`}><span>STEP 1</span><div><strong>招待を共有する</strong><p>どちらか一人が、Setlogの招待コードを相手に送ります。</p></div></div>
+                  <div className={`timeline-item ${inviteStep > 2 ? "is-done" : inviteStep === 2 ? "is-current" : ""}`}><span>STEP 2</span><div><strong>Setlogで参加する</strong><p>招待を受け取った人が、コードを使ってSetlogに参加します。</p></div></div>
+                  <div className={`timeline-item ${inviteStep === 3 ? "is-current" : ""}`}><span>STEP 3</span><div><strong>22:00〜23:00に回答する</strong><p>連絡先を交換するか、明日も続けるかを選びます。</p></div></div>
+                </div>
+                <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">Setlog<span>↗</span></div><span className="status-pill status-pill--light">今日の共有先</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">一日を共有する相手</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 土曜日を共有</p></div></div>
+                  {!inviteReady && <div className="invite-panel"><span className="status-pill">{invite?.suggestedCreator ? "今はあなたの番です" : "相手の番です"}</span><p>{invite?.suggestedCreator ? "Setlogで今日のログを作り、招待コードをここに貼ってください。先に送った人が共有者になります。" : "相手が招待を共有する番です。待っていても、あなたが先に共有しても大丈夫です。"}</p><div className="profile-field"><label htmlFor="setlog-invite-input"><span>Setlogの招待コードかリンク</span></label><input id="setlog-invite-input" type="text" autoComplete="off" value={inviteInput} onChange={(event) => setInviteInput(event.target.value)} placeholder="例：https://setlog.kr/invite/…" aria-describedby="setlog-invite-help" /><small id="setlog-invite-help">Setlogの共有文を、set-mob公式LINEに送っても登録できます。</small></div><button className="primary-button full-width" onClick={saveInvite} disabled={inviteBusy || !inviteInput.trim()}>{inviteBusy ? "送信中…" : "招待コードを相手に送る"} <span>→</span></button><button className="text-button" type="button" onClick={() => void refreshRemotePair()}>状態を更新する</button></div>}
+                  {inviteReady && invite?.submittedByMe && invite.canEdit && <div className="invite-panel"><span className="status-pill">相手の番です</span><div className="setlog-access"><span className="label">送った招待コード</span><strong>{remotePair.setlogCode}</strong>{remotePair.setlogUrl && <a href={remotePair.setlogUrl} target="_blank" rel="noreferrer">Setlogを開く ↗</a>}</div><div className="connected-message"><span>…</span><div><strong>相手の参加を待っています</strong><p>相手がSetlogに参加すると、LINEでお知らせします。</p></div></div>{inviteEditing ? <><div className="profile-field"><label htmlFor="setlog-invite-edit"><span>Setlogの招待コードかリンク</span></label><input id="setlog-invite-edit" type="text" autoComplete="off" value={inviteInput} onChange={(event) => setInviteInput(event.target.value)} placeholder="例：https://setlog.kr/invite/…" /></div><button className="primary-button full-width" onClick={saveInvite} disabled={inviteBusy || !inviteInput.trim()}>{inviteBusy ? "送信中…" : "招待を変更して送り直す"} <span>→</span></button></> : <button className="text-button" type="button" onClick={() => { setInviteInput(remotePair.setlogUrl ?? ""); setInviteEditing(true); }}>招待を変更する</button>}<button className="text-button" type="button" onClick={() => void refreshRemotePair()}>状態を更新する</button></div>}
+                  {inviteReady && !invite?.submittedByMe && !invite?.joined && <div className="invite-panel"><span className="status-pill">今はあなたの番です</span><p>コードを使ってSetlogに参加したら、「Setlogに参加した」を押してください。相手に伝わります。</p><div className="setlog-access"><span className="label">Setlogの招待コード</span><strong>{remotePair.setlogCode}</strong></div>{!setlogOpened ? <><a className="primary-button full-width" href={remotePair.setlogUrl ?? undefined} target="_blank" rel="noreferrer" onClick={() => setSetlogOpened(true)}>Setlogを開く <span>↗</span></a><button className="secondary-button full-width" type="button" onClick={copyInviteCode}>{inviteCopied ? "コピーしました ✓" : "コードをコピーする"}</button></> : <><button className="primary-button full-width" onClick={confirmJoined} disabled={inviteBusy}>{inviteBusy ? "記録中…" : "Setlogに参加した"} <span>✓</span></button><div className="invite-sub-actions"><a className="text-button" href={remotePair.setlogUrl ?? undefined} target="_blank" rel="noreferrer">Setlogを開く ↗</a><button className="text-button" type="button" onClick={copyInviteCode}>{inviteCopied ? "コピーしました ✓" : "コードをコピーする"}</button></div></>}</div>}
+                  {inviteReady && invite?.joined && <div className="connected-message"><span>✓</span><div><strong>Setlogに参加しました</strong><p>招待を共有した相手にも伝わっています。一日を共有したら、22時にここへ戻ってきてください。</p></div></div>}
+                  {inviteReady && invite?.submittedByMe && partnerJoined && !invite?.joined && <div className="connected-message"><span>✓</span><div><strong>相手がSetlogに参加しました</strong><p>一日を共有したら、22時にここへ戻ってきてください。</p></div></div>}
+                  {inviteReady && invite?.submittedByMe && !invite?.canEdit && !partnerJoined && <div className="invite-panel"><div className="setlog-access"><span className="label">送った招待コード</span><strong>{remotePair.setlogCode}</strong></div><p>招待は共有済みです。相手の参加確認は23:00までできます。</p></div>}
+                </div>
+                {showDecisionBlock && <><div className="setlog-next"><div><span className="label">今日の振り返り</span><strong>回答できるのは22:00〜23:00です</strong><p>連絡先を交換するか、明日も続けるかを選べます。回答は相手に表示されません。</p></div></div><button className="primary-button full-width" onClick={openDecision} disabled={!decisionIsOpen}>{decisionIsOpen ? "回答画面へ進む" : "22時から回答できます"} <span>→</span></button></>}
+              </>
+            ) : (
+              <>
+                <div className="setlog-card"><div className="setlog-card__head"><div className="setlog-logo">Setlog<span>↗</span></div><span className="status-pill status-pill--light">今日の共有先</span></div><div className="setlog-room"><div className={`pair-avatar avatar--${selectedCandidate.color}`}><span>{selectedCandidate.initials}</span></div><div><span className="label">一日を共有する相手</span><strong>あなた × {selectedCandidate.displayName}さん</strong><p>12:00 — 22:00 / 土曜日を共有</p></div></div>{state.setlogStatus === "connected" ? <div className="connected-message"><span>✓</span><div><strong>共有中の画面です（デモ）</strong><p>実際の参加では、Setlogで一日を共有したあと、22時にここへ戻ってきてください。</p></div></div> : state.setlogStatus === "error" ? <div className="error-message"><strong>参加情報を確認できませんでした</strong><p>通信状況を確認して、もう一度お試しください。</p></div> : <div className="setlog-card__action"><p>デモでは、Setlogを使わず次の画面を確認できます。</p><button className="primary-button" onClick={connectSetlog} disabled={state.setlogStatus === "connecting"}>{state.setlogStatus === "connecting" ? "確認中…" : "共有中の画面を見る（デモ）"}<span>↗</span></button></div>}</div>
+                {state.setlogStatus === "connected" && <><div className="setlog-next"><div><span className="label">今日の振り返り</span><strong>回答できるのは22:00〜23:00です</strong><p>連絡先を交換するか、明日も続けるかを選べます。回答は相手に表示されません。</p></div></div><button className="primary-button full-width" onClick={openDecision} disabled={!decisionIsOpen}>{decisionIsOpen ? "回答画面へ進む" : "22時から回答できます"} <span>→</span></button></>}
+                {state.setlogStatus === "error" && <button className="primary-button full-width" onClick={connectSetlog}>もう一度接続する <span>↻</span></button>}
+              </>
+            )}
           </section>
         )}
 
-        {state.phase === "decision" && selectedCandidate && (
+{state.phase === "decision" && selectedCandidate && (
           <section className="page-section narrow-section decision-section">
             <div className="decision-top"><div><p className="eyebrow">06 / 今日の振り返り</p><h2>今日の相手と、<br /><em>この先どうしたい？</em></h2></div><div className="decision-time"><strong>22:00</strong><span>回答受付中</span></div></div>
             <p className="section-lede">回答は相手に表示されません。お互いの回答がそろうと、二人とも交換を希望した連絡先だけを表示します。「明日（日曜）も続けたい」を選んだ場合は、今回は連絡先を交換しません。</p>

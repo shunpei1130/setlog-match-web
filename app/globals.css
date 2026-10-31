@@ -378,6 +378,11 @@ h1 em, h2 em { color: var(--accent); font-style: normal; }
 .setlog-next { display: grid; gap: 14px; margin-top: 10px; padding: 14px; }
 .setlog-next strong { display: block; margin-top: 5px; font-size: 14px; }
 .setlog-next p { margin: 5px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.55; }
+.invite-panel { display: grid; gap: 14px; justify-items: start; }
+.invite-panel > p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }
+.invite-panel .profile-field, .invite-panel .setlog-access, .invite-panel .connected-message { width: 100%; }
+.invite-panel .text-button { justify-self: start; }
+.invite-sub-actions { display: flex; gap: 18px; }
 .safety-link { margin: 18px auto 0; }
 
 .decision-section { padding-bottom: 24px; }
