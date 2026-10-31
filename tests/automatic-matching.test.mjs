@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { maximumMatching } from "../lib/matching.ts";
-import { normalizeSetlogInvite } from "../lib/setlog-invite.ts";
+import { normalizeSetlogInvite, extractSetlogInvite } from "../lib/setlog-invite.ts";
 import { scheduleForEventKey, timingForEvent } from "../lib/event-schedule.ts";
 import { validateReleaseConfiguration } from "../ios/release-config.cjs";
 
@@ -69,4 +69,64 @@ test("matching result messages cover matched and unmatched participants", async 
   assert.match(unmatched, /相手がいませんでした/);
   assert.match(unmatched, /次回土曜/);
   assert.notEqual(matched, unmatched);
+});
+
+test("Setlog invitations are extracted from the share text Setlog produces", () => {
+  const shareText = "日決めて、セットログ撮ろう\n参加コード: c5kqehg https://setlog.kr/invite/c5kqehg";
+  assert.deepEqual(extractSetlogInvite(shareText), { code: "c5kqehg", url: "https://setlog.kr/invite/c5kqehg" });
+  assert.deepEqual(extractSetlogInvite("参加コード: c5kqehg"), { code: "c5kqehg", url: "https://setlog.kr/invite/c5kqehg" });
+  assert.deepEqual(extractSetlogInvite("参加コード： c5kqehg"), { code: "c5kqehg", url: "https://setlog.kr/invite/c5kqehg" });
+  assert.deepEqual(extractSetlogInvite("これ見て https://setlog.app/invite/AbC123 です"), { code: "AbC123", url: "https://setlog.kr/invite/AbC123" });
+  assert.equal(extractSetlogInvite("今日は楽しかったです"), null);
+  assert.equal(extractSetlogInvite("https://example.com/invite/c5kqehg"), null);
+  assert.equal(extractSetlogInvite("参加コード: "), null);
+  assert.equal(extractSetlogInvite(null), null);
+  assert.equal(extractSetlogInvite(42), null);
+});
+
+test("matching result messages use a LIFF button only for matched users with a LIFF URL", async () => {
+  const { matchingResultMessage, matchingResultMessages } = await import("../lib/matching-message.ts");
+  const liffUrl = "https://liff.line.me/1234567890-AbCdEfGh";
+  const [withButton] = matchingResultMessages(true, liffUrl);
+  assert.equal(withButton.type, "template");
+  assert.equal(withButton.altText, matchingResultMessage(true));
+  assert.equal(withButton.template.type, "buttons");
+  assert.ok(withButton.template.text.length <= 160);
+  assert.deepEqual(withButton.template.actions, [{ type: "uri", label: "ペア画面を開く", uri: liffUrl }]);
+
+  assert.deepEqual(matchingResultMessages(true, null), [{ type: "text", text: matchingResultMessage(true) }]);
+  assert.deepEqual(matchingResultMessages(false, liffUrl), [{ type: "text", text: matchingResultMessage(false) }]);
+});
+
+test("invite shared message carries the code, invite URL and join postback", async () => {
+  const { inviteSharedMessage } = await import("../lib/invite-message.ts");
+  const pairId = "123e4567-e89b-12d3-a456-426614174000";
+  const message = inviteSharedMessage(pairId, "c5kqehg", "https://setlog.kr/invite/c5kqehg");
+  assert.equal(message.type, "template");
+  assert.match(message.template.text, /c5kqehg/);
+  assert.ok(message.template.text.length <= 160);
+  const [openAction, joinAction] = message.template.actions;
+  assert.deepEqual(openAction, { type: "uri", label: "Setlogを開く", uri: "https://setlog.kr/invite/c5kqehg" });
+  assert.equal(joinAction.type, "postback");
+  const params = new URLSearchParams(joinAction.data);
+  assert.equal(params.get("action"), "join_setlog");
+  assert.equal(params.get("pairId"), pairId);
+});
+
+test("LIFF URL is built from the LIFF_ID environment value only", async () => {
+  const { getLiffId, buildLiffUrl } = await import("../lib/liff.ts");
+  const original = process.env.LIFF_ID;
+  try {
+    delete process.env.LIFF_ID;
+    assert.equal(getLiffId(), null);
+    assert.equal(buildLiffUrl(), null);
+    process.env.LIFF_ID = "1234567890-AbCdEfGh";
+    assert.equal(getLiffId(), "1234567890-AbCdEfGh");
+    assert.equal(buildLiffUrl(), "https://liff.line.me/1234567890-AbCdEfGh");
+    process.env.LIFF_ID = "not a liff id";
+    assert.equal(getLiffId(), null);
+  } finally {
+    if (original === undefined) delete process.env.LIFF_ID;
+    else process.env.LIFF_ID = original;
+  }
 });

@@ -2,8 +2,9 @@ import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { lineMatchingDeliveries } from "../db/schema";
 import { isAllowedAuthEmail } from "./auth-email";
-import { pushLineMessage } from "./line";
-import { matchingResultMessage } from "./matching-message";
+import { pushLineMessages } from "./line";
+import { buildLiffUrl } from "./liff";
+import { matchingResultMessages } from "./matching-message";
 
 // Sends the Saturday matching result to every eligible participant of a weekly
 // event whose matching run has completed: pair members get the "matched"
@@ -44,6 +45,7 @@ export async function sendMatchingResultNotifications(eventId: string) {
       AND d.id IS NULL
   `);
   const recipients = rows.filter((row) => isAllowedAuthEmail(row.email));
+  const liffUrl = buildLiffUrl();
   let sent = 0;
   let failed = 0;
   for (const row of recipients) {
@@ -53,7 +55,7 @@ export async function sendMatchingResultNotifications(eventId: string) {
       .returning({ id: lineMatchingDeliveries.id });
     if (!claim) continue;
     try {
-      await pushLineMessage(row.lineUserId, matchingResultMessage(row.matched));
+      await pushLineMessages(row.lineUserId, matchingResultMessages(row.matched, liffUrl));
       sent += 1;
     } catch {
       failed += 1;

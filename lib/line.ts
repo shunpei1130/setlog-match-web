@@ -5,6 +5,19 @@ const LINE_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token";
 const LINE_PROFILE_URL = "https://api.line.me/v2/profile";
 const LINE_BOT_PROFILE_URL = "https://api.line.me/v2/bot/profile";
 const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
+const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
+const LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
+
+export type LineTextMessage = { type: "text"; text: string };
+export type LineMessageAction =
+  | { type: "uri"; label: string; uri: string }
+  | { type: "postback"; label: string; data: string; displayText?: string };
+export type LineTemplateMessage = {
+  type: "template";
+  altText: string;
+  template: { type: "buttons"; text: string; actions: LineMessageAction[] };
+};
+export type LineMessage = LineTextMessage | LineTemplateMessage;
 
 function getLineConfig() {
   const channelId = process.env.LINE_CHANNEL_ID;
@@ -68,7 +81,7 @@ export async function checkLineFriendship(lineUserId: string) {
   return true;
 }
 
-export async function pushLineMessage(lineUserId: string, text: string) {
+export async function pushLineMessages(lineUserId: string, messages: LineMessage[]) {
   const { accessToken } = getLineConfig();
   if (!accessToken) throw new Error("LINE Messaging API is not configured.");
   const response = await fetch(LINE_PUSH_URL, {
@@ -79,10 +92,47 @@ export async function pushLineMessage(lineUserId: string, text: string) {
     },
     body: JSON.stringify({
       to: lineUserId,
-      messages: [{ type: "text", text }],
+      messages,
     }),
   });
   if (!response.ok) throw new Error(`LINE message request failed with status ${response.status}.`);
+}
+
+export async function pushLineMessage(lineUserId: string, text: string) {
+  await pushLineMessages(lineUserId, [{ type: "text", text }]);
+}
+
+export async function replyLineMessage(replyToken: string, messages: LineMessage[]) {
+  const { accessToken } = getLineConfig();
+  if (!accessToken) throw new Error("LINE Messaging API is not configured.");
+  const response = await fetch(LINE_REPLY_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages,
+    }),
+  });
+  if (!response.ok) throw new Error(`LINE reply request failed with status ${response.status}.`);
+}
+
+export async function verifyLineIdToken(idToken: string) {
+  const { channelId } = getLineConfig();
+  const response = await fetch(LINE_VERIFY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      id_token: idToken,
+      client_id: channelId,
+    }),
+  });
+  if (!response.ok) throw new Error(`LINE ID token verification failed with status ${response.status}.`);
+  const payload = await response.json() as { sub?: string; name?: string; email?: string };
+  if (!payload.sub) throw new Error("LINE ID token verification returned no subject.");
+  return { sub: payload.sub, name: payload.name, email: payload.email };
 }
 
 export function verifyLineWebhookSignature(body: string, signature: string | null) {
