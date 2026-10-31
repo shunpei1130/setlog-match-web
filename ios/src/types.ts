@@ -75,7 +75,7 @@ export type PairResult = {
 export type RemotePair = {
   kind?: "weekly" | "extension";
   endsAt?: string;
-  invite?: { status: "waiting" | "ready"; canEdit: boolean; suggestedCreator: boolean; joined: boolean };
+  invite?: { status: "waiting" | "ready"; canEdit: boolean; suggestedCreator: boolean; submittedByMe: boolean; joined: boolean };
   extension?: { eventKey: string; startsAt: string; status: string; canCancel: boolean } | null;
   id: string;
   eventKey: string;

@@ -32,12 +32,112 @@ export function PairScreen({
 }) {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [invite, setInvite] = useState("");
+  const [inviteInput, setInviteInput] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [openedSetlog, setOpenedSetlog] = useState(false);
+
+  // Reset the invite panel's local state when a different invite arrives
+  // (e.g. the partner replaces the code). Adjusting state during render is
+  // the React-recommended pattern for prop-derived resets.
+  const [lastInviteCode, setLastInviteCode] = useState(pair.setlogCode);
+  if (lastInviteCode !== pair.setlogCode) {
+    setLastInviteCode(pair.setlogCode);
+    setEditing(false);
+    setOpenedSetlog(false);
+    setCopied(false);
+  }
 
   const copyCode = async () => {
     if (!pair.setlogCode) return;
     await Clipboard.setStringAsync(pair.setlogCode);
     setCopied(true);
+  };
+
+  const openSetlog = async () => {
+    setOpenedSetlog(true);
+    if (pair.setlogUrl) await Linking.openURL(pair.setlogUrl);
+  };
+
+  const invite = pair.invite;
+  const inviteReady = invite ? invite.status === "ready" : Boolean(pair.setlogCode);
+  const submittedByMe = invite?.submittedByMe ?? false;
+  const joined = invite?.joined ?? false;
+  const partnerJoined = Boolean(inviteReady && submittedByMe && invite && !invite.canEdit);
+  const step2Done = joined || partnerJoined;
+  const inviteStep = !inviteReady ? 1 : step2Done ? 3 : 2;
+
+  const renderInvitePanel = () => {
+    if (!inviteReady) {
+      const mine = Boolean(invite?.suggestedCreator);
+      return (
+        <View style={styles.panel}>
+          <TurnPill mine={mine} />
+          <Text style={styles.ruleCopy}>{mine
+            ? "Setlogで今日のログを作り、招待コードをここに貼ってください。先に送った人が共有者になります。"
+            : "相手が招待を共有する番です。待っていても、あなたが先に共有しても大丈夫です。"}</Text>
+          <Field label="Setlogの招待リンク・招待コード" value={inviteInput} onChangeText={setInviteInput} autoCapitalize="none" autoCorrect={false} placeholder="例：https://setlog.kr/invite/…" />
+          <Text style={styles.helpCopy}>Setlogの共有文を、set-mob公式LINEに送っても登録できます。</Text>
+          <ActionButton disabled={busy || !inviteInput.trim()} onPress={() => void onSaveInvite(inviteInput)}>{busy ? "送信中…" : "招待コードを相手に送る"}</ActionButton>
+        </View>
+      );
+    }
+    if (joined) {
+      return <DoneBlock title="Setlogに参加しました" copy="招待を共有した相手にも伝わっています。一日を共有したら、22時にここへ戻ってきてください。" />;
+    }
+    if (submittedByMe && partnerJoined) {
+      return <DoneBlock title="相手がSetlogに参加しました" copy="一日を共有したら、22時にここへ戻ってきてください。" />;
+    }
+    if (submittedByMe && invite?.canEdit) {
+      if (editing) {
+        return (
+          <View style={styles.panel}>
+            <Field label="Setlogの招待コードかリンク" value={inviteInput} onChangeText={setInviteInput} autoCapitalize="none" autoCorrect={false} placeholder="例：https://setlog.kr/invite/…" />
+            <ActionButton disabled={busy || !inviteInput.trim()} onPress={() => void onSaveInvite(inviteInput)}>{busy ? "送信中…" : "招待を変更して送り直す"}</ActionButton>
+            <ActionButton variant="secondary" onPress={() => setEditing(false)}>変更しない</ActionButton>
+          </View>
+        );
+      }
+      return (
+        <View style={styles.panel}>
+          <TurnPill mine={false} />
+          <Text style={styles.cardLabel}>送った招待コード</Text>
+          <Text selectable style={styles.code}>{pair.setlogCode}</Text>
+          <Text style={styles.ruleTitle}>相手の参加を待っています</Text>
+          <Text style={styles.ruleCopy}>相手がSetlogに参加すると、LINEでお知らせします。</Text>
+          <ActionButton variant="secondary" disabled={busy} onPress={() => void onConfirmJoined()}>Setlogに参加した</ActionButton>
+          <ActionButton variant="secondary" onPress={() => { setInviteInput(pair.setlogUrl ?? ""); setEditing(true); }}>招待を変更する</ActionButton>
+        </View>
+      );
+    }
+    if (!submittedByMe) {
+      return (
+        <View style={styles.panel}>
+          <TurnPill mine />
+          <Text style={styles.ruleCopy}>コードを使ってSetlogに参加したら、「Setlogに参加した」を押してください。相手に伝わります。</Text>
+          <Text style={styles.cardLabel}>Setlogの招待コード</Text>
+          <Text selectable style={styles.code}>{pair.setlogCode}</Text>
+          {!openedSetlog ? (
+            <>
+              <ActionButton onPress={() => void openSetlog()}>Setlogを開く</ActionButton>
+              <ActionButton variant="secondary" onPress={() => void copyCode()}>{copied ? "コピーしました" : "コードをコピーする"}</ActionButton>
+            </>
+          ) : (
+            <>
+              <ActionButton disabled={busy} onPress={() => void onConfirmJoined()}>Setlogに参加した</ActionButton>
+              <ActionButton variant="secondary" onPress={() => void openSetlog()}>Setlogを開く</ActionButton>
+              <ActionButton variant="secondary" onPress={() => void copyCode()}>{copied ? "コピーしました" : "コードをコピーする"}</ActionButton>
+            </>
+          )}
+        </View>
+      );
+    }
+    return (
+      <View style={styles.panel}>
+        <Text style={styles.cardLabel}>送った招待コード</Text>
+        <Text selectable style={styles.code}>{pair.setlogCode}</Text>
+        <Text style={styles.ruleCopy}>招待は共有済みです。相手の参加確認は23:00までできます。</Text>
+      </View>
+    );
   };
 
   if (setlogOpen) {
@@ -55,19 +155,8 @@ export function PairScreen({
               <Text style={styles.roomMeta}>12:00〜22:00</Text>
             </View>
           </View>
-          <View style={styles.codeBox}>
-            <Text style={styles.cardLabel}>招待コード</Text>
-            {pair.setlogCode ? <Text selectable style={styles.code}>{pair.setlogCode}</Text> : <Text style={styles.ruleCopy}>{pair.invite?.suggestedCreator ? "Setlogで新しいログを作り、招待コードをここに入力して相手に送りましょう。" : "相手からの招待コードを待っています。あなたがSetlogでログを作って、招待することもできます。"}</Text>}
-            {pair.setlogCode ? (
-              <ActionButton variant="secondary" onPress={() => void copyCode()}>{copied ? "コピーしました" : "コードをコピーする"}</ActionButton>
-            ) : null}
-          </View>
-          {pair.setlogUrl ? (
-            <ActionButton variant={pair.decisionOpen ? "secondary" : "primary"} onPress={() => void Linking.openURL(pair.setlogUrl!)}>Setlogを開く</ActionButton>
-          ) : null}
-          {pair.setlogCode && !pair.invite?.joined ? <ActionButton disabled={busy} variant="secondary" onPress={() => void onConfirmJoined()}>Setlogに参加できました</ActionButton> : null}
-          {pair.invite?.joined ? <Text style={styles.ruleCopy}>参加を確認しました。</Text> : null}
-          {pair.invite?.canEdit ? <View style={styles.codeBox}><Field label={pair.setlogCode ? "招待コードを変更する" : "Setlogの招待リンク・招待コード"} value={invite} onChangeText={setInvite} autoCapitalize="none" autoCorrect={false} placeholder="招待リンクまたは英数字のコード" /><ActionButton variant={pair.setlogCode ? "secondary" : "primary"} disabled={busy || !invite.trim()} onPress={() => void onSaveInvite(invite)}>{busy ? "送信中…" : "招待コードを相手に送る"}</ActionButton></View> : null}
+          <InviteSteps current={inviteStep} />
+          {renderInvitePanel()}
         </Card>
         <Card>
           <Text style={styles.nextLabel}>22時になったら</Text>
@@ -115,6 +204,48 @@ export function PairScreen({
   );
 }
 
+function TurnPill({ mine }: { mine: boolean }) {
+  return (
+    <View style={[styles.pill, mine ? styles.pillMine : styles.pillPartner]}>
+      <Text style={styles.pillText}>{mine ? "今はあなたの番です" : "相手の番です"}</Text>
+    </View>
+  );
+}
+
+function DoneBlock({ title, copy }: { title: string; copy: string }) {
+  return (
+    <View style={styles.doneRow}>
+      <Text style={styles.doneMark}>✓</Text>
+      <View style={styles.doneBody}>
+        <Text style={styles.ruleTitle}>{title}</Text>
+        <Text style={styles.ruleCopy}>{copy}</Text>
+      </View>
+    </View>
+  );
+}
+
+function InviteSteps({ current }: { current: number }) {
+  const steps = [
+    { n: 1, title: "招待を共有する" },
+    { n: 2, title: "Setlogで参加する" },
+    { n: 3, title: "22:00〜23:00に回答する" },
+  ];
+  return (
+    <View style={styles.steps} accessibilityLabel={`共有の手順、ステップ${current}`}>
+      {steps.map((step) => {
+        const done = step.n < current;
+        const active = step.n === current;
+        return (
+          <View key={step.n} style={styles.stepRow}>
+            <Text style={[styles.stepLabel, done && styles.stepDone, active && styles.stepActive]}>{done ? `STEP ${step.n} ✓` : `STEP ${step.n}`}</Text>
+            <Text style={[styles.stepTitle, !active && !done && styles.stepUpcoming]}>{step.title}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function Timeline({ time, title, copy, current }: { time: string; title: string; copy: string; current: boolean }) {
   return (
     <View style={styles.timelineRow}>
@@ -157,8 +288,23 @@ const styles = StyleSheet.create({
   roomBody: { flex: 1 },
   roomTitle: { color: colors.ink, fontSize: 15, fontWeight: "900" },
   roomMeta: { color: colors.inkSoft, fontSize: 11, marginTop: 4 },
-  codeBox: { paddingTop: 16 },
   code: { color: colors.ink, fontSize: 28, fontWeight: "900", letterSpacing: 2, marginTop: 6 },
+  panel: { paddingTop: 16 },
+  pill: { alignSelf: "flex-start", borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 10 },
+  pillMine: { backgroundColor: colors.accent },
+  pillPartner: { backgroundColor: colors.surfaceMuted },
+  pillText: { color: colors.ink, fontSize: 11, fontWeight: "900" },
+  helpCopy: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginBottom: 6 },
+  steps: { paddingTop: 16, gap: 8 },
+  stepRow: { flexDirection: "row", alignItems: "baseline", gap: 10 },
+  stepLabel: { width: 66, color: colors.inkSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  stepActive: { color: colors.accentDark },
+  stepDone: { color: colors.success },
+  stepTitle: { color: colors.ink, fontSize: 13, fontWeight: "900" },
+  stepUpcoming: { color: colors.inkSoft, fontWeight: "700" },
+  doneRow: { flexDirection: "row", gap: 10, paddingTop: 16 },
+  doneMark: { color: colors.success, fontSize: 18, fontWeight: "900" },
+  doneBody: { flex: 1 },
   nextLabel: { color: colors.accentDark, fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   nextTitle: { color: colors.ink, fontSize: 18, fontWeight: "900", marginTop: 7 },
   nextCopy: { color: colors.inkSoft, fontSize: 12, lineHeight: 19, marginTop: 5 },
